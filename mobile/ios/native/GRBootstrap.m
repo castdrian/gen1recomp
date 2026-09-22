@@ -80,8 +80,10 @@ static void GRAppendReservedRegions(NSMutableArray *regions, UIView *view,
 
 static BOOL GRIsLaunchURL(NSURL *url)
 {
+    BOOL currentScheme = [url.scheme caseInsensitiveCompare:@"g1rdeluxe"] == NSOrderedSame;
+    BOOL legacyScheme = [url.scheme caseInsensitiveCompare:@"gen1recomp++"] == NSOrderedSame;
     return url.scheme.length > 0 && url.host.length > 0
-        && [url.scheme caseInsensitiveCompare:@"gen1recomp++"] == NSOrderedSame
+        && (currentScheme || legacyScheme)
         && [url.host caseInsensitiveCompare:@"launch"] == NSOrderedSame;
 }
 

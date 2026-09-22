@@ -1496,12 +1496,13 @@ for _, t in ipairs(HEADER_TABS) do
 end
 
 local function headerTabMetrics(m)
-  local gap = math.floor(6 * m.s)
+  local compact = m.horizontalClass == "compact"
+  local gap = math.floor((compact and 4 or 6) * m.s)
   local width = m.chip
   for _, label in pairs(TAB_LABELS) do
     width = math.max(width, Kit.textWidth("micro", Strings(label)) + 4)
   end
-  local dropW = width + math.floor(24 * m.s)
+  local dropW = width + math.floor((compact and 14 or 24) * m.s)
   local used, rows = dropW, 1
   for _ = 1, #HEADER_TABS do
     if used + gap + width > m.contentW then rows, used = rows + 1, width
@@ -1654,7 +1655,7 @@ local function buildHeader(imp, m)
   local ty = y + math.floor(6 * m.s)
   local tabLeft = tx
   local tabRight = m.x + m.w - m.pad
-  local tabGap = math.floor(6 * m.s)
+  local tabGap = math.floor((m.horizontalClass == "compact" and 4 or 6) * m.s)
   local tabRowGap = math.floor(4 * m.s)
 
   -- the cartridge dropdown: just the game's initial and the caret; the
@@ -6472,22 +6473,35 @@ local function drawTabLayer(imp, tabId, x, contentY, w, viewH, availH, m, dx)
   imp.tab = prevTab
 end
 
-local function drawDuoSidebar(imp, m)
+local function drawDuoGamePane(imp, m)
   local rect = m.sidebarRect
+  if not rect and m.duoAxis == "horizontal" then
+    rect = m.secondaryRect
+  end
   if not rect then return end
   local pad = math.max(m.pad, math.floor(16 * m.s))
-  local x, y = rect.x + pad, rect.y + pad
+  local x = rect.x + pad
+  local y = rect.y + pad
   local w = rect.width - 2 * pad
-  if w < Kit.tapMin() then return end
-  Theme.fillRounded(rect.x + 6 * m.s, rect.y + 6 * m.s,
-    rect.width - 12 * m.s, rect.height - 12 * m.s, PAL.surface, 1, 14)
+  if w < Kit.tapMin() or rect.height < Kit.tapMin() then return end
+  local inset = math.floor(6 * m.s)
+  Theme.fillRounded(rect.x + inset, rect.y + inset,
+    math.max(1, rect.width - 2 * inset), math.max(1, rect.height - 2 * inset),
+    PAL.surface, 1, 14)
   Kit.textBold("heading", Strings("GAMES"), x, y, PAL.heading)
-  y = y + Kit.textHeight("heading") + math.floor(14 * m.s)
+  local gridY = y + Kit.textHeight("heading") + math.floor(14 * m.s)
   local gap = math.floor(8 * m.s)
-  local h = math.max(Kit.tapMin(), math.floor(48 * m.s))
-  for _, game in ipairs(GAME_TABS) do
-    if y + h > rect.y + rect.height - pad then break end
-    btn(imp, x, y, w, h, "duo-game-" .. game.id, Strings(game.label), {
+  local columns = math.max(1, math.floor((w + gap) / (180 * m.s)))
+  columns = math.min(columns, #GAME_TABS)
+  local cellW = math.floor((w - gap * (columns - 1)) / columns)
+  local h = math.max(Kit.tapMin(), math.floor(52 * m.s))
+  for index, game in ipairs(GAME_TABS) do
+    local column = (index - 1) % columns
+    local row = math.floor((index - 1) / columns)
+    local bx = x + column * (cellW + gap)
+    local by = gridY + row * (h + gap)
+    if by + h > rect.y + rect.height - pad then break end
+    btn(imp, bx, by, cellW, h, "duo-game-" .. game.id, Strings(game.label), {
       face = "tab",
       color = game.color,
       active = imp.tab == game.id,
@@ -6498,7 +6512,6 @@ local function drawDuoSidebar(imp, m)
         imp:_switchTab(game.id)
       end,
     })
-    y = y + h + gap
   end
 end
 
@@ -6563,7 +6576,7 @@ function LauncherView.draw(imp)
   imp._modalUpNow = mkey ~= nil
   if imp._modalUpNow then imp:_blurPanelFields() end
   Kit.blockClicks = imp._modalUpNow or Transition.active()
-  drawDuoSidebar(imp, m)
+  drawDuoGamePane(imp, m)
 
   local step = Kit.scrollStep(m.s)
   do

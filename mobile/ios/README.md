@@ -7,7 +7,7 @@ an iOS app with LÖVE 12.0.
 
 The app uses the public iOS Documents directory as its LÖVE save directory.
 There is no `pokemon-love2d` subdirectory and the app does not create a
-README file there. When browsing `On My iPhone > gen1recomp++` in Files, the
+README file there. When browsing `On My iPhone > g1rdeluxe` in Files, the
 directory contains the app's runtime data directly, including:
 
 - installed mods and downloaded ROMs
@@ -21,13 +21,13 @@ the game on its next activation.
 
 ## Launch URLs
 
-The app registers the `gen1recomp++` URL scheme. Use the shared launch format
+The app registers the `g1rdeluxe` URL scheme. Use the shared launch format
 to start a game or open the launcher:
 
 ```text
-gen1recomp++://launch?game=red
-gen1recomp++://launch?game=red&slot=2
-gen1recomp++://launch?game=red&launcher=1
+g1rdeluxe://launch?game=red
+g1rdeluxe://launch?game=red&slot=2
+g1rdeluxe://launch?game=red&launcher=1
 ```
 
 The complete parameter list and Android testing command are documented in the
@@ -35,7 +35,7 @@ repository [Launch Options](../../README.md#launch-options) section. The iOS
 Simulator can open a URL with:
 
 ```bash
-xcrun simctl openurl booted 'gen1recomp++://launch?game=red'
+xcrun simctl openurl booted 'g1rdeluxe://launch?game=red'
 ```
 
 On a device, long-press an imported game cartridge to open its actions and
@@ -71,7 +71,7 @@ scripts/build_ios.sh --device --release --install
 Device builds require a paired, unlocked device and a valid Apple signing
 identity. Set `DEVELOPMENT_TEAM` or `CODE_SIGN_IDENTITY` when automatic
 signing cannot select the intended account. Add `--ipa` to create
-`dist/ios/gen1recomp++.ipa`.
+`dist/ios/g1rdeluxe.ipa`.
 
 The script verifies the final app before packaging it:
 
@@ -102,10 +102,10 @@ option.
 Simulator and device app bundles are copied to:
 
 ```text
-dist/ios/Debug-iphonesimulator/gen1recomp++.app
-dist/ios/Release-iphonesimulator/gen1recomp++.app
-dist/ios/Debug-iphoneos/gen1recomp++.app
-dist/ios/Release-iphoneos/gen1recomp++.app
+dist/ios/Debug-iphonesimulator/g1rdeluxe.app
+dist/ios/Release-iphonesimulator/g1rdeluxe.app
+dist/ios/Debug-iphoneos/g1rdeluxe.app
+dist/ios/Release-iphoneos/g1rdeluxe.app
 ```
 
 The intermediate Xcode products are under `mobile/ios/build/`. Both locations
@@ -120,9 +120,9 @@ saves; those are created at runtime in Documents.
 
 | Field | Default |
 | --- | --- |
-| Display name | `gen1recomp++` |
-| Product name | `gen1recomp++` |
-| Bundle identifier | `com.theboisclub.gen1recompplusplus` |
+| Display name | `g1rdeluxe` |
+| Product name | `g1rdeluxe` |
+| Bundle identifier | `com.theboisclub.g1rdeluxe` |
 | Save directory | Public `Documents` root |
 | Orientation | Portrait |
 

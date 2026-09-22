@@ -69,7 +69,19 @@ check(layout.x + layout.w <= 488 or layout.x >= 512,
   "layout primary pane avoids the division region")
 eq(Kit.touchTarget, 44, "iOS layout uses 44 point touch targets")
 check(Kit.tapMin() >= 44, "iOS minimum hit target is at least 44 points")
-check(layout.s > 1.3, "larger text increases layout scale")
+eq(Kit.textScale, 1.4, "larger text reaches the text system")
+
+system.getWindowMetrics = function()
+  return '{"safe":{"left":20,"top":30,"right":24,"bottom":18},'
+    .. '"horizontalClass":"regular","verticalClass":"regular",'
+    .. '"textScale":1.4,"scene":"tabletop:1",'
+    .. '"regions":[{"kind":"hinge","x":0,"y":388,"width":1000,"height":24}]}'
+end
+ViewportMetrics.invalidate()
+local horizontal = Layout.metrics(1200)
+eq(horizontal.duoAxis, "horizontal", "horizontal Duo poses use stacked panes")
+check(horizontal.secondaryRect ~= nil, "horizontal Duo poses expose a secondary pane")
+eq(horizontal.sidebarRect, nil, "horizontal Duo poses avoid a vertical sidebar")
 
 local generation = first.generation
 system.getWindowMetrics = function()

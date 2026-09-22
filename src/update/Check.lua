@@ -34,7 +34,7 @@ local function fullAssetName(version, osName, arch, port)
   elseif osName == "Android" then
     return "gen1recomp-" .. version .. "-android.apk"
   elseif osName == "iOS" then
-    return "gen1recomp++-" .. version .. "-ios.ipa"
+    return "g1rdeluxe-" .. version .. "-ios.ipa"
   elseif osName == "OS X" or osName == "macOS" then
     return "gen1recomp-" .. version .. "-macos.zip"
   elseif osName == "Windows" then

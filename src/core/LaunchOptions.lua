@@ -130,6 +130,15 @@ end
 
 local cachedIntentGame = nil
 
+local function runningOnIOS()
+  if type(love) ~= "table" or type(love.system) ~= "table"
+      or type(love.system.getOS) ~= "function" then
+    return false
+  end
+  local ok, osName = pcall(love.system.getOS)
+  return ok and osName == "iOS"
+end
+
 local function uriAuthority(uri)
   if type(uri) ~= "string" or uri == "" then return nil end
 
@@ -139,7 +148,9 @@ local function uriAuthority(uri)
     or withoutFragment
   local scheme, host, path = authority:match(
     "^([%a][%w+%-%.]*):%/%/([^/]*)(.*)$")
-  if not scheme or scheme:lower() ~= "gen1recomp++"
+  local normalizedScheme = scheme and scheme:lower()
+  if not normalizedScheme
+      or (normalizedScheme ~= "gen1recomp++" and normalizedScheme ~= "g1rdeluxe")
       or host:lower() ~= "launch" or (path ~= "" and path ~= "/") then
     return nil
   end
@@ -328,7 +339,8 @@ function LaunchOptions.uriFor(version, options)
   if options.update ~= nil then
     query[#query + 1] = "update=" .. (options.update and "1" or "0")
   end
-  return "gen1recomp++://launch?" .. table.concat(query, "&")
+  local scheme = runningOnIOS() and "g1rdeluxe" or "gen1recomp++"
+  return scheme .. "://launch?" .. table.concat(query, "&")
 end
 
 -- Point a version at a save slot before it boots.  Accepts either a slot id

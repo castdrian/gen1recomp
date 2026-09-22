@@ -141,7 +141,7 @@ public final class GRPickerBridge: NSObject {
         var request = URLRequest(url: requestURL)
         request.httpMethod = verb
         request.timeoutInterval = 60
-        request.setValue(userAgent.map { String(cString: $0) } ?? "gen1recomp",
+        request.setValue(userAgent.map { String(cString: $0) } ?? "g1rdeluxe",
                          forHTTPHeaderField: "User-Agent")
         if let headers, headers.pointee != 0 {
             for line in String(cString: headers).split(separator: "\n") {
@@ -196,10 +196,10 @@ public final class GRPickerBridge: NSObject {
                                        iconLength: Int32) -> Bool {
         guard let url, let icon, iconLength > 0,
               let launchURL = URL(string: String(cString: url)),
-              launchURL.scheme?.lowercased() == "gen1recomp++",
+              ["g1rdeluxe", "gen1recomp++"].contains(launchURL.scheme?.lowercased() ?? ""),
               launchURL.host?.lowercased() == "launch" else { return false }
 
-        let rawLabel = label.map { String(cString: $0) } ?? "gen1recomp++"
+        let rawLabel = label.map { String(cString: $0) } ?? "g1rdeluxe"
         let displayName = String(rawLabel.replacingOccurrences(of: "\r", with: " ")
             .replacingOccurrences(of: "\n", with: " ").prefix(48))
         guard let source = UIImage(data: Data(bytes: icon, count: Int(iconLength))) else {
@@ -222,8 +222,8 @@ public final class GRPickerBridge: NSObject {
         })
 
         let uuid = UUID().uuidString
-        let payloadIdentifier = "com.theboisclub.gen1recompplusplus.webclip.\(uuid)"
-        let description = "Web Clip for launching \(displayName) in gen1recomp++"
+        let payloadIdentifier = "com.theboisclub.g1rdeluxe.webclip.\(uuid)"
+        let description = "Web Clip for launching \(displayName) in g1rdeluxe"
         let webClip: [String: Any] = [
             "FullScreen": true,
             "Icon": iconData,
@@ -233,11 +233,11 @@ public final class GRPickerBridge: NSObject {
             "PayloadDescription": description,
             "PayloadDisplayName": displayName,
             "PayloadIdentifier": payloadIdentifier,
-            "PayloadOrganization": "gen1recomp++",
+            "PayloadOrganization": "g1rdeluxe",
             "PayloadType": "com.apple.webClip.managed",
             "PayloadUUID": uuid,
             "PayloadVersion": 1,
-            "TargetApplicationBundleIdentifier": "com.theboisclub.gen1recompplusplus",
+            "TargetApplicationBundleIdentifier": "com.theboisclub.g1rdeluxe",
             "URL": launchURL.absoluteString,
         ]
         let profile: [String: Any] = [
@@ -248,7 +248,7 @@ public final class GRPickerBridge: NSObject {
             "PayloadDescription": description,
             "PayloadDisplayName": displayName,
             "PayloadIdentifier": payloadIdentifier,
-            "PayloadOrganization": "gen1recomp++",
+            "PayloadOrganization": "g1rdeluxe",
             "PayloadRemovalDisallowed": false,
             "PayloadType": "Configuration",
             "PayloadUUID": UUID().uuidString,
@@ -263,7 +263,7 @@ public final class GRPickerBridge: NSObject {
             return false
         }
         profileServer?.cancel()
-        let serverQueue = DispatchQueue(label: "com.theboisclub.gen1recompplusplus.webclip")
+        let serverQueue = DispatchQueue(label: "com.theboisclub.g1rdeluxe.webclip")
         server.newConnectionHandler = { connection in
             connection.stateUpdateHandler = { state in
                 guard case .ready = state else {
@@ -271,7 +271,7 @@ public final class GRPickerBridge: NSObject {
                     return
                 }
                 connection.receive(minimumIncompleteLength: 1, maximumLength: 8192) { _, _, _, _ in
-                    var response = Data("HTTP/1.1 200 OK\r\nContent-Type: application/x-apple-aspen-config\r\nContent-Disposition: attachment; filename=gen1recomp.mobileconfig\r\nContent-Length: \(profileData.count)\r\nConnection: close\r\n\r\n".utf8)
+                    var response = Data("HTTP/1.1 200 OK\r\nContent-Type: application/x-apple-aspen-config\r\nContent-Disposition: attachment; filename=g1rdeluxe.mobileconfig\r\nContent-Length: \(profileData.count)\r\nConnection: close\r\n\r\n".utf8)
                     response.append(profileData)
                     connection.send(content: response, completion: .contentProcessed { _ in
                         connection.cancel()
@@ -290,7 +290,7 @@ public final class GRPickerBridge: NSObject {
                     .compactMap({ $0 as? UIWindowScene })
                     .first(where: { $0.activationState == .foregroundActive }),
                       let root = scene.windows.first(where: { $0.isKeyWindow })?.rootViewController,
-                      let profileURL = URL(string: "http://127.0.0.1:\(port)/gen1recomp.mobileconfig") else {
+                      let profileURL = URL(string: "http://127.0.0.1:\(port)/g1rdeluxe.mobileconfig") else {
                     server.cancel()
                     return
                 }

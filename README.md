@@ -255,7 +255,8 @@ screen shows what it is doing and any button skips straight into the game; a
 sync conflict opens the launcher so you can pick a copy rather than booting
 over one.
 
-Android and iOS also accept the same launch request as a URL:
+Android and iOS also accept the same query parameters as a URL. Android and
+desktop builds use `gen1recomp++`; iOS builds use `g1rdeluxe`:
 
 ```text
 gen1recomp++://launch?game=red
@@ -287,10 +288,10 @@ adb shell am start -a android.intent.action.VIEW \
   com.theboisclub.pokemonred
 ```
 
-To test a link in the iOS Simulator:
+To test an iOS link in the iOS Simulator:
 
 ```bash
-xcrun simctl openurl booted 'gen1recomp++://launch?game=red'
+xcrun simctl openurl booted 'g1rdeluxe://launch?game=red'
 ```
 
 On a physical iPhone or iPad, open the URL from another app that can hand off
@@ -328,7 +329,7 @@ in [docs/linux-arm64-build.md](docs/linux-arm64-build.md).
 
 ## iOS
 
-Every release ships `gen1recomp++-*-ios.ipa`. Sideload it with AltStore
+Every release ships `g1rdeluxe-*-ios.ipa`. Sideload it with AltStore
 (Windows or Mac) — see [docs/ios-sideload.md](docs/ios-sideload.md). To
 build and install from source on a Mac instead, see
 [docs/ios-install.md](docs/ios-install.md).
@@ -337,7 +338,7 @@ On iOS, long-press an imported game cartridge in the launcher and choose the
 Home Screen action. For custom carts, open Custom Carts and use Home Screen on
 the cart row you want. iOS opens a configuration profile in Safari; approve it
 from Settings when prompted. The generated entry keeps the game's or cart's
-artwork and launches through the same `gen1recomp++://launch` URL format.
+artwork and launches through the `g1rdeluxe://launch` URL format.
 
 <div>
     <a href="https://intradeus.github.io/http-protocol-redirector?r=sidestore://source?url=https://github.com/bryanthaboi/gen1recomp/raw/refs/heads/main/mobile/ios/app-repo.json"><img src="./.github/resources/sidestore-badge.png" alt="Add to SideStore" height="60"></a>

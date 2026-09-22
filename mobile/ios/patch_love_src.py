@@ -384,7 +384,7 @@ int w_httpRequest(lua_State *L)
 
 int w_installWebClip(lua_State *L)
 {
-	const char *label = luaL_optstring(L, 1, "gen1recomp++");
+\tconst char *label = luaL_optstring(L, 1, "g1rdeluxe");
 	const char *url = luaL_checkstring(L, 2);
 	size_t iconLength = 0;
 	const char *icon = luaL_checklstring(L, 3, &iconLength);
@@ -1018,8 +1018,8 @@ def patch_pbxproj():
         settings = (
             "\t\t\t\tSWIFT_VERSION = 5.0;\n"
             "\t\t\t\tIPHONEOS_DEPLOYMENT_TARGET = 15.0;\n"
-            "\t\t\t\tPRODUCT_NAME = \"gen1recomp++\";\n"
-            "\t\t\t\tEXECUTABLE_NAME = \"gen1recomp++\";\n"
+            "\t\t\t\tPRODUCT_NAME = \"g1rdeluxe\";\n"
+            "\t\t\t\tEXECUTABLE_NAME = \"g1rdeluxe\";\n"
             '\t\t\t\tCODE_SIGN_ENTITLEMENTS = "ios/native/love-ios.entitlements";\n'
         )
         text = text[: m.end()] + settings + text[m.end():]

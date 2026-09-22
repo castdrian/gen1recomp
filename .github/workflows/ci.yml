@@ -95,16 +95,16 @@ jobs:
         if: github.repository == 'bryanthaboi/gen1recomp'
         uses: actions/upload-artifact@v7
         with:
-          name: gen1recomp++-ios-ipa
-          path: dist/ios/gen1recomp++.ipa
+          name: g1rdeluxe-ios-ipa
+          path: dist/ios/g1rdeluxe.ipa
           if-no-files-found: error
           retention-days: 7
       - name: upload iOS simulator artifact
         if: github.repository != 'bryanthaboi/gen1recomp'
         uses: actions/upload-artifact@v7
         with:
-          name: gen1recomp++-ios-simulator
-          path: dist/ios/Release-iphonesimulator/gen1recomp++.app
+          name: g1rdeluxe-ios-simulator
+          path: dist/ios/Release-iphonesimulator/g1rdeluxe.app
           if-no-files-found: error
           retention-days: 7
       - name: clean up signing keychain

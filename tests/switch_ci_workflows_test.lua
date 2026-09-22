@@ -131,7 +131,7 @@ end
 mustContain(comment_wf, "workflows: [ci]", "platform-artifact-comment")
 for _, artifact in ipairs({
   "gen1recomp++-macos",
-  "gen1recomp++-ios-ipa",
+  "g1rdeluxe-ios-ipa",
   "gen1recomp-switch-nro",
   "gen1recomp-xbox-uwp",
   "gen1recomp-linux-arm64",

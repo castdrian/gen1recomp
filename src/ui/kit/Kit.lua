@@ -140,14 +140,17 @@ local UI_SCALE = 1.3
 function Kit.layout(width, height, textScale)
   local fontScale = Theme.clamp(tonumber(textScale) or 1, 1, 3)
   local s = Theme.clamp(math.min(width / 640, height / 768), 0.9, 1.6)
-    * UI_SCALE * fontScale
+    * UI_SCALE
+  local fontSizeScale = s * fontScale
   -- Two numbers, not a formatted key: this runs once per frame and the
   -- string:format allocated on every one of them.
   local kw, kh = math.floor(width), math.floor(height)
-  if Kit._fontW ~= kw or Kit._fontH ~= kh or Kit._fontScale ~= fontScale then
+  if Kit._fontW ~= kw or Kit._fontH ~= kh
+      or Kit._fontScale ~= fontScale or Kit._fontSizeScale ~= fontSizeScale then
     Kit._fontW, Kit._fontH = kw, kh
     Kit._fontScale = fontScale
-    Kit.fonts = Theme.fonts(s)
+    Kit._fontSizeScale = fontSizeScale
+    Kit.fonts = Theme.fonts(fontSizeScale)
     clearCaches()   -- every cached Text/width belongs to the old font set
   end
   Kit.scale = s

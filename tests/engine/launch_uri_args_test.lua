@@ -33,6 +33,9 @@ do
   eq(request.game, "blue", "URI scheme and host are case-insensitive")
   eq(request.sync, true, "boolean URI values accept true")
   eq(request.update, false, "boolean URI values accept off")
+  local branded = LaunchOptions.parseURI("g1rdeluxe://launch?game=red&slot=2")
+  eq(branded.game, "red", "iOS branded URI uses shared parsing")
+  eq(branded.slot, "2", "iOS branded URI preserves slot selection")
   local direct = LaunchOptions.parseURI("gen1recomp++://launch?game=red")
   eq(direct.launcher, nil, "omitted launcher does not force the launcher")
   eq(direct.sync, nil, "omitted sync keeps the normal sync default")
@@ -43,6 +46,12 @@ do
   eq(LaunchOptions.uriFor("red", { cart = "custom_cart", slot = "slot 2" }),
     "gen1recomp++://launch?game=red&cart=custom_cart&slot=slot%202",
     "URI builder encodes cart and slot values")
+  local savedIOSSystem = love.system
+  love.system = { getOS = function() return "iOS" end }
+  eq(LaunchOptions.uriFor("red", { slot = "2" }),
+    "g1rdeluxe://launch?game=red&slot=2",
+    "iOS URI builder uses the branded scheme")
+  love.system = savedIOSSystem
   check(LaunchOptions.parseURI("gen1recomp++://other?game=red") == nil,
     "unknown URI hosts are rejected")
   check(LaunchOptions.parseURI("https://launch?game=red") == nil,
@@ -155,8 +164,8 @@ check(androidManifest:find('android:host="launch"', 1, true) ~= nil,
   "Android restricts the URI host to launch")
 check(plist:find("CFBundleURLTypes", 1, true) ~= nil,
   "iOS registers URL types")
-check(plist:find("gen1recomp++", 1, true) ~= nil,
-  "iOS registers the gen1recomp++ scheme")
+check(plist:find("g1rdeluxe", 1, true) ~= nil,
+  "iOS registers the g1rdeluxe scheme")
 check(artifactWorkflow:find("workflows: [ci]", 1, true) ~= nil,
   "artifact comments are driven by the unified CI workflow")
 check(artifactWorkflow:find("cancel-in-progress: false", 1, true) ~= nil,
@@ -171,7 +180,7 @@ check(artifactWorkflow:find("gen1recomp-linux-x86_64", 1, true) ~= nil,
   "the unified artifact comment includes Linux x86_64")
 check(artifactWorkflow:find("gen1recomp++-macos", 1, true) ~= nil,
   "the unified artifact comment includes macOS")
-check(artifactWorkflow:find("gen1recomp++-ios-simulator", 1, true) ~= nil,
+check(artifactWorkflow:find("g1rdeluxe-ios-simulator", 1, true) ~= nil,
   "the unified artifact comment includes the fork-safe iOS simulator build")
 local pickerBridge = read("mobile/ios/native/GRPickerBridge.swift")
 local bootstrap = read("mobile/ios/native/GRBootstrap.m")

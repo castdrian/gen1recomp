@@ -20,9 +20,9 @@
 #   - macOS + Xcode (xcodebuild)
 #   - mobile/ios/love-src/ (see --fetch / mobile/ios/README.md)
 #
-# Output: dist/ios/<Config>-<sdk>/gen1recomp++.app (convenience copy)
-#         dist/ios/gen1recomp++.ipa                 (device builds only)
-#         mobile/ios/build/Build/Products/<Config>-<sdk>/gen1recomp++.app
+# Output: dist/ios/<Config>-<sdk>/g1rdeluxe.app (convenience copy)
+#         dist/ios/g1rdeluxe.ipa                 (device builds only)
+#         mobile/ios/build/Build/Products/<Config>-<sdk>/g1rdeluxe.app
 
 set -euo pipefail
 
@@ -39,14 +39,14 @@ RESOURCES_DIR="$XCODE_DIR/ios/resources"
 LOVE_FILE="$RESOURCES_DIR/game.love"
 LIBS_DIR="$XCODE_DIR/ios/libraries"
 
-APP_NAME="gen1recomp++"
-DISPLAY_NAME="gen1recomp++"
-PRODUCT_NAME="gen1recomp++"
+APP_NAME="g1rdeluxe"
+DISPLAY_NAME="g1rdeluxe"
+PRODUCT_NAME="g1rdeluxe"
 # Bundle ID resolution, most specific wins:
 #   1. GEN1_BUNDLE_ID env var
 #   2. mobile/ios/bundle_id.local (one line, gitignored — pins YOUR install
 #      so rebuilds keep updating the same app on your phone)
-#   3. device builds: com.gen1recomp.t<your team id> — explicit App IDs are
+#   3. device builds: com.g1rdeluxe.t<your team id> — explicit App IDs are
 #      globally unique across ALL Apple accounts (and required once
 #      capabilities like HealthKit are involved), so a per-team default
 #      lets anyone build without colliding with someone else's app
@@ -139,7 +139,7 @@ if $DEVICE && [ -z "${DEVELOPMENT_TEAM:-}" ]; then
   fi
 fi
 if [ -z "$BUNDLE_ID" ]; then
-  BUNDLE_ID="com.theboisclub.gen1recompplusplus"
+  BUNDLE_ID="com.theboisclub.g1rdeluxe"
 fi
 
 # --------------------------------------------------------------- host checks
@@ -936,7 +936,7 @@ run_xcodebuild() {
   fi
 }
 
-# Pack Payload/<app>.app into dist/ios/gen1recomp++.ipa for release / sideload tools.
+# Pack Payload/<app>.app into dist/ios/g1rdeluxe.ipa for release / sideload tools.
 package_ipa() {
   local app="$1"
   local ipa="$DIST/$APP_NAME.ipa"

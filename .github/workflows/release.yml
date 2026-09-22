@@ -791,9 +791,9 @@ jobs:
           [ -n "$apk" ] || { echo "::error::no Android APK found under dist/android/release"; exit 1; }
           cp "$apk" "$outdir/gen1recomp-${v}-android.apk"
 
-          ipa="dist/ios/gen1recomp++.ipa"
+          ipa="dist/ios/g1rdeluxe.ipa"
           [ -f "$ipa" ] || { echo "::error::$ipa not found (expected from scripts/build_ios.sh --device)"; exit 1; }
-          cp "$ipa" "$outdir/gen1recomp++-${v}-ios.ipa"
+          cp "$ipa" "$outdir/g1rdeluxe-${v}-ios.ipa"
 
           swzip="dist/switch/gen1recomp-${v}-switch.zip"
           [ -f "$swzip" ] || { echo "::error::$swzip not found (expected from scripts/build_switch.sh --fused → pack_sd_zip.sh)"; exit 1; }
@@ -947,7 +947,7 @@ jobs:
             "dist/release/gen1recomp-${v}-linux-arm64.AppImage"
             "dist/release/gen1recomp-${v}-linux.flatpak"
             "dist/release/gen1recomp-${v}-android.apk"
-            "dist/release/gen1recomp++-${v}-ios.ipa"
+            "dist/release/g1rdeluxe-${v}-ios.ipa"
             "dist/release/gen1recomp-${v}-switch.zip"
             "dist/release/gen1recomp-${v}-xbox-uwp.zip"
             "dist/release/gen1recomp-${v}-rg34xxsp-stockos64-mod.zip"
@@ -969,15 +969,15 @@ jobs:
         run: |
           set -euo pipefail
           v="${{ needs.version.outputs.version }}"
-          ipa="dist/release/gen1recomp++-${v}-ios.ipa"
+          ipa="dist/release/g1rdeluxe-${v}-ios.ipa"
           app_repo="mobile/ios/app-repo.json"
           [ -f "$ipa" ] || { echo "::error::$ipa not found"; exit 1; }
           [ -f "$app_repo" ] || { echo "::error::$app_repo not found"; exit 1; }
 
           date="$(date -u +"%Y-%m-%d")"
           size="$(wc -c < "$ipa" | tr -d '[:space:]')"
-          download_url="https://github.com/${GITHUB_REPOSITORY}/releases/download/v${v}/gen1recomp++-${v}-ios.ipa"
-          bundle_id="com.theboisclub.gen1recompplusplus"
+          download_url="https://github.com/${GITHUB_REPOSITORY}/releases/download/v${v}/g1rdeluxe-${v}-ios.ipa"
+          bundle_id="com.theboisclub.g1rdeluxe"
           localized_description="Gen1Recomp - A native Lua / LÖVE2D recreation of Gen 1 Poke"
           release_notes="$(GH_TOKEN="${{ github.token }}" gh release view "v${v}" --json body --jq '.body // ""' 2>/dev/null || true)"
           if [ -n "$release_notes" ]; then

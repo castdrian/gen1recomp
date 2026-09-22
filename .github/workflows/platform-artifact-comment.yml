@@ -46,8 +46,8 @@ jobs:
           Windows|gen1recomp-win64|gen1recomp-win64.zip
           Linux x86_64|gen1recomp-linux-x86_64|gen1recomp-linux-x86_64.AppImage
           Android|gen1recomp-android-apk|gen1recomp-android.apk
-          iOS|gen1recomp++-ios-ipa|gen1recomp++.ipa
-          iOS Simulator|gen1recomp++-ios-simulator|gen1recomp++.app
+          iOS|g1rdeluxe-ios-ipa|g1rdeluxe.ipa
+          iOS Simulator|g1rdeluxe-ios-simulator|g1rdeluxe.app
           Nintendo Switch|gen1recomp-switch-nro|gen1recomp-switch.nro
           Xbox UWP|gen1recomp-xbox-uwp|gen1recomp-xbox-uwp.zip
           Linux arm64|gen1recomp-linux-arm64|gen1recomp-linux-arm64.AppImage

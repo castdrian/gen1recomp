@@ -80,6 +80,18 @@ local function usableRects(viewport)
   return panes
 end
 
+local function paneAxis(panes)
+  if #panes < 2 then return nil end
+  local primary, secondary = panes[1], panes[2]
+  local sameTop = math.abs(primary.y - secondary.y) <= 2
+  local sameHeight = math.abs(primary.height - secondary.height) <= 4
+  if sameTop and sameHeight then return "vertical" end
+  local sameLeft = math.abs(primary.x - secondary.x) <= 2
+  local sameWidth = math.abs(primary.width - secondary.width) <= 4
+  if sameLeft and sameWidth then return "horizontal" end
+  return nil
+end
+
 -- Breakpoints, in safe-area pixels.  Named so panels read intent rather than
 -- magic numbers.
 Layout.BP = {
@@ -109,7 +121,12 @@ function Layout.metrics(maxAppW)
   local W, H = viewport.width, viewport.height
   local ox, oy = viewport.safe.x, viewport.safe.y
   local sw, sh = viewport.safe.width, viewport.safe.height
-  local s = Kit.layout(sw, sh, viewport.textScale)
+  local panes = usableRects(viewport)
+  local primary = panes[1] or {
+    x = ox, y = oy, width = sw, height = sh,
+  }
+  local axis = paneAxis(panes)
+  local s = Kit.layout(primary.width, primary.height, viewport.textScale)
   if W == lastW and H == lastH and ox == lastOx and oy == lastOy
       and sw == lastSw and sh == lastSh and maxAppW == lastMax
       and viewport.generation == lastGeneration then
@@ -119,10 +136,6 @@ function Layout.metrics(maxAppW)
   lastSw, lastSh, lastMax = sw, sh, maxAppW
   lastGeneration = viewport.generation
 
-  local panes = usableRects(viewport)
-  local primary = panes[1] or {
-    x = ox, y = oy, width = sw, height = sh,
-  }
   local appW = math.min(primary.width, (maxAppW or 1200) * s)
   local m = M
   m.W, m.H, m.s = W, H, s
@@ -137,7 +150,7 @@ function Layout.metrics(maxAppW)
   m.btnH = math.max(Kit.tapMin(), math.floor(38 * s))
   m.chip = math.max(Kit.tapMin(), math.floor(40 * s))
   m.railH = math.max(3, math.floor(4 * s))
-  m.logoH = math.floor(Theme.clamp(sh * 0.10, 36, 84))
+  m.logoH = math.floor(Theme.clamp(primary.height * 0.10, 36, 84))
   m.cols = viewport.horizontalClass == "compact" and 1
         or (appW >= Layout.BP.threeCol * s and 3)
         or (appW >= 560 * s and 2)
@@ -156,11 +169,13 @@ function Layout.metrics(maxAppW)
   m.regions = viewport.regions
   m.panes = panes
   m.primaryRect = primary
+  m.secondaryRect = panes[2]
+  m.duoAxis = axis
   m.duoSplit = #panes > 1
   m.sidebarRect = nil
-  if m.duoSplit and viewport.horizontalClass == "regular" then
+  if axis == "vertical" and viewport.horizontalClass == "regular" then
     local sidebar = panes[2]
-    if sidebar and sidebar.width >= 220 * s and sidebar.height >= 420 * s then
+    if sidebar and sidebar.width >= 220 * s and sidebar.height >= 320 * s then
       m.sidebarRect = sidebar
     end
   end
