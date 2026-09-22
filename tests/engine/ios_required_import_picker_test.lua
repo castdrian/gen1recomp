@@ -36,5 +36,9 @@ check(bootstrap:find("struct utsname", 1, true)
 check(patch:find("int w_getDeviceModel", 1, true)
     and patch:find('{ "getDeviceModel", w_getDeviceModel }', 1, true),
   "iOS liblove patch exposes the hardware model to Lua")
+check(bootstrap:find("windowMetricsJSON", 1, true) ~= nil
+    and patch:find("int w_getWindowMetrics", 1, true)
+    and patch:find('{ "getWindowMetrics", w_getWindowMetrics }', 1, true),
+  "iOS exposes active-scene window metrics to Lua")
 
 print("ios_required_import_picker_test: ok")

@@ -25,6 +25,59 @@ static Class GRSceneDelegateClass;
 static void GRInstallApplicationURLHooks(void);
 static void GRInstallSceneURLHooksForClass(Class sceneDelegateClass);
 
+static UIWindow *GRActiveWindow(void)
+{
+    UIWindow *fallback = nil;
+    UIWindow *foreground = nil;
+    for (UIScene *scene in UIApplication.sharedApplication.connectedScenes) {
+        if (![scene isKindOfClass:[UIWindowScene class]]) continue;
+        UIWindowScene *windowScene = (UIWindowScene *)scene;
+        if (windowScene.activationState == UISceneActivationStateUnattached) continue;
+        for (UIWindow *window in windowScene.windows) {
+            if (windowScene.activationState == UISceneActivationStateForegroundActive) {
+                if (window.isKeyWindow) return window;
+                if (!foreground && !window.hidden) foreground = window;
+            } else if (!fallback && !window.hidden) {
+                fallback = window;
+            }
+        }
+    }
+    return foreground ?: fallback;
+}
+
+static NSNumber *GRTextScale(void)
+{
+    UIContentSizeCategory category = UIApplication.sharedApplication.preferredContentSizeCategory;
+    if ([category isEqualToString:UIContentSizeCategoryAccessibilityExtraExtraExtraLarge]) return @1.8;
+    if ([category isEqualToString:UIContentSizeCategoryAccessibilityExtraExtraLarge]) return @1.6;
+    if ([category isEqualToString:UIContentSizeCategoryAccessibilityExtraLarge]) return @1.45;
+    if ([category isEqualToString:UIContentSizeCategoryAccessibilityLarge]) return @1.3;
+    if ([category isEqualToString:UIContentSizeCategoryAccessibilityMedium]) return @1.2;
+    if ([category isEqualToString:UIContentSizeCategoryExtraExtraExtraLarge]) return @1.25;
+    if ([category isEqualToString:UIContentSizeCategoryExtraExtraLarge]) return @1.15;
+    return @1.0;
+}
+
+static void GRAppendReservedRegions(NSMutableArray *regions, UIView *view,
+                                    id kind,
+                                    NSString *name)
+{
+    if (@available(iOS 27.1, *)) {
+        if (![view respondsToSelector:@selector(reservedRegionsOfKind:)]) return;
+        for (id region in [view reservedRegionsOfKind:kind]) {
+            if (![region isActive]) continue;
+            CGRect frame = [region frame];
+            [regions addObject:@{
+                @"kind": name,
+                @"x": @(frame.origin.x),
+                @"y": @(frame.origin.y),
+                @"width": @(frame.size.width),
+                @"height": @(frame.size.height),
+            }];
+        }
+    }
+}
+
 static BOOL GRIsLaunchURL(NSURL *url)
 {
     return url.scheme.length > 0 && url.host.length > 0
@@ -326,6 +379,7 @@ static void GRInstallApplicationURLHooks(void)
 @interface GRDeviceBridge : NSObject
 + (NSString *)deviceModel;
 + (NSString *)launchURI;
++ (NSString *)windowMetricsJSON;
 @end
 
 @implementation GRDeviceBridge
@@ -346,6 +400,51 @@ static void GRInstallApplicationURLHooks(void)
 + (NSString *)launchURI
 {
     return GRTakeLaunchURI() ?: @"";
+}
+
++ (NSString *)windowMetricsJSON
+{
+    UIWindow *window = GRActiveWindow();
+    UIWindowScene *scene = window.windowScene;
+    UIView *view = window.rootViewController.view;
+    if (!view) return @"{}";
+    CGRect bounds = view.bounds;
+    UIEdgeInsets insets = view.safeAreaInsets;
+    UITraitCollection *traits = scene.traitCollection ?: view.traitCollection;
+    CGFloat scale = scene.screen.nativeScale;
+    if (scale <= 0) scale = UIScreen.mainScreen.nativeScale;
+    NSMutableArray *regions = [NSMutableArray array];
+    if (@available(iOS 27.1, *)) {
+        GRAppendReservedRegions(regions, view,
+                                [UIViewReservedRegionKind divisionRegionKind],
+                                @"division");
+        GRAppendReservedRegions(regions, view,
+                                [UIViewReservedRegionKind occlusionRegionKind],
+                                @"occlusion");
+    }
+    NSDictionary *metrics = @{
+        @"width": @(bounds.size.width),
+        @"height": @(bounds.size.height),
+        @"pixelWidth": @(bounds.size.width * scale),
+        @"pixelHeight": @(bounds.size.height * scale),
+        @"dpiX": @(scale),
+        @"dpiY": @(scale),
+        @"safe": @{
+            @"left": @(insets.left),
+            @"top": @(insets.top),
+            @"right": @(insets.right),
+            @"bottom": @(insets.bottom),
+        },
+        @"horizontalClass": traits.horizontalSizeClass == UIUserInterfaceSizeClassCompact
+            ? @"compact" : @"regular",
+        @"verticalClass": traits.verticalSizeClass == UIUserInterfaceSizeClassCompact
+            ? @"compact" : @"regular",
+        @"textScale": GRTextScale(),
+        @"scene": scene.session.persistentIdentifier ?: @"",
+        @"regions": regions,
+    };
+    NSData *data = [NSJSONSerialization dataWithJSONObject:metrics options:0 error:nil];
+    return data ? [[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding] : @"{}";
 }
 @end
 

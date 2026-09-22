@@ -42,11 +42,12 @@ jobs:
               found=1
             fi
           done <<'ARTIFACTS'
-          macOS|gen1recomp++-macos|gen1recomp++-macos.zip
+          macOS|gen1recomp++-macos|gen1recomp-macos.zip
           Windows|gen1recomp-win64|gen1recomp-win64.zip
           Linux x86_64|gen1recomp-linux-x86_64|gen1recomp-linux-x86_64.AppImage
           Android|gen1recomp-android-apk|gen1recomp-android.apk
           iOS|gen1recomp++-ios-ipa|gen1recomp++.ipa
+          iOS Simulator|gen1recomp++-ios-simulator|gen1recomp++.app
           Nintendo Switch|gen1recomp-switch-nro|gen1recomp-switch.nro
           Xbox UWP|gen1recomp-xbox-uwp|gen1recomp-xbox-uwp.zip
           Linux arm64|gen1recomp-linux-arm64|gen1recomp-linux-arm64.AppImage

@@ -169,6 +169,10 @@ check(artifactWorkflow:find("gen1recomp-win64", 1, true) ~= nil,
   "the unified artifact comment includes Windows")
 check(artifactWorkflow:find("gen1recomp-linux-x86_64", 1, true) ~= nil,
   "the unified artifact comment includes Linux x86_64")
+check(artifactWorkflow:find("gen1recomp++-macos", 1, true) ~= nil,
+  "the unified artifact comment includes macOS")
+check(artifactWorkflow:find("gen1recomp++-ios-simulator", 1, true) ~= nil,
+  "the unified artifact comment includes the fork-safe iOS simulator build")
 local pickerBridge = read("mobile/ios/native/GRPickerBridge.swift")
 local bootstrap = read("mobile/ios/native/GRBootstrap.m")
 local iosPatch = read("mobile/ios/patch_love_src.py")

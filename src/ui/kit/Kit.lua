@@ -62,6 +62,8 @@ Kit.mouseClicked = false   -- left button pressed this frame
 Kit.mouseDown = false      -- held, polled (drag / press-and-hold)
 Kit.wheelY = 0             -- wheel notches queued since the last frame
 Kit.scale = 1
+Kit.textScale = 1
+Kit.touchTarget = 30
 Kit.blockClicks = false
 Kit.audit = nil
 
@@ -135,17 +137,24 @@ Kit.font = font
 -- for the latter only.
 local UI_SCALE = 1.3
 
-function Kit.layout(width, height)
-  local s = Theme.clamp(math.min(width / 640, height / 768), 0.9, 1.6) * UI_SCALE
+function Kit.layout(width, height, textScale)
+  local fontScale = Theme.clamp(tonumber(textScale) or 1, 1, 3)
+  local s = Theme.clamp(math.min(width / 640, height / 768), 0.9, 1.6)
+    * UI_SCALE * fontScale
   -- Two numbers, not a formatted key: this runs once per frame and the
   -- string:format allocated on every one of them.
   local kw, kh = math.floor(width), math.floor(height)
-  if Kit._fontW ~= kw or Kit._fontH ~= kh then
+  if Kit._fontW ~= kw or Kit._fontH ~= kh or Kit._fontScale ~= fontScale then
     Kit._fontW, Kit._fontH = kw, kh
+    Kit._fontScale = fontScale
     Kit.fonts = Theme.fonts(s)
     clearCaches()   -- every cached Text/width belongs to the old font set
   end
   Kit.scale = s
+  Kit.textScale = fontScale
+  local osName = love and love.system and love.system.getOS
+    and love.system.getOS()
+  Kit.touchTarget = osName == "iOS" and 44 or 30
   Kit.width, Kit.height = width, height
   return s
 end
@@ -649,7 +658,7 @@ Kit._audit = audit
 -- Minimum tap target.  30px at scale 1 (up from the editor's 26) because the
 -- launcher is the first thing a phone user touches and these are the only
 -- controls that matter.
-function Kit.tapMin() return math.floor(30 * Kit.scale) end
+function Kit.tapMin() return math.floor((Kit.touchTarget or 30) * Kit.scale) end
 
 -- ---------------------------------------------------------------- surfaces
 function Kit.card(x, y, w, h, variant)

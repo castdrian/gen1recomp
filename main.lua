@@ -627,6 +627,10 @@ local function startLaunchRequest(request)
   return true
 end
 
+function love.resize()
+  require("src.ui.kit.Layout").invalidate()
+end
+
 function love.load(args)
   -- Before anything can shell out (update check, mod index, ROM picker),
   -- claim one hidden console on Windows so those children inherit it instead

@@ -16,10 +16,69 @@
 
 local Kit = require("src.ui.kit.Kit")
 local Theme = require("src.ui.kit.Theme")
-local SafeArea = require("src.core.SafeArea")
-local GameViewport = require("src.render.GameViewport")
+local ViewportMetrics = require("src.core.ViewportMetrics")
 
 local Layout = {}
+
+local function splitRect(rect, cut)
+  local left = math.max(rect.x, cut.x)
+  local top = math.max(rect.y, cut.y)
+  local right = math.min(rect.x + rect.width, cut.x + cut.width)
+  local bottom = math.min(rect.y + rect.height, cut.y + cut.height)
+  if right <= left or bottom <= top then return { rect } end
+
+  local pieces = {}
+  local rectRight = rect.x + rect.width
+  local rectBottom = rect.y + rect.height
+  if top > rect.y then
+    pieces[#pieces + 1] = {
+      x = rect.x, y = rect.y, width = rect.width, height = top - rect.y,
+    }
+  end
+  if bottom < rectBottom then
+    pieces[#pieces + 1] = {
+      x = rect.x, y = bottom, width = rect.width,
+      height = rectBottom - bottom,
+    }
+  end
+  if left > rect.x then
+    pieces[#pieces + 1] = {
+      x = rect.x, y = top, width = left - rect.x, height = bottom - top,
+    }
+  end
+  if right < rectRight then
+    pieces[#pieces + 1] = {
+      x = right, y = top, width = rectRight - right, height = bottom - top,
+    }
+  end
+  return pieces
+end
+
+local function usableRects(viewport)
+  local panes = {
+    {
+      x = viewport.safe.x,
+      y = viewport.safe.y,
+      width = viewport.safe.width,
+      height = viewport.safe.height,
+    },
+  }
+  for _, region in ipairs(viewport.regions or {}) do
+    local nextPanes = {}
+    for _, pane in ipairs(panes) do
+      for _, piece in ipairs(splitRect(pane, region)) do
+        if piece.width >= 1 and piece.height >= 1 then
+          nextPanes[#nextPanes + 1] = piece
+        end
+      end
+    end
+    panes = nextPanes
+  end
+  table.sort(panes, function(a, b)
+    return a.width * a.height > b.width * b.height
+  end)
+  return panes
+end
 
 -- Breakpoints, in safe-area pixels.  Named so panels read intent rather than
 -- magic numbers.
@@ -37,29 +96,40 @@ Layout.BP = {
 -- writes to it today) -- a caller that needs a shifted field should save,
 -- assign and restore it around the call, not wrap `m` in a proxy.
 local M = {}
-local lastW, lastH, lastOx, lastOy, lastSw, lastSh, lastMax
+local lastW, lastH, lastOx, lastOy, lastSw, lastSh, lastMax, lastGeneration
+
+function Layout.invalidate()
+  lastW, lastH, lastOx, lastOy, lastSw, lastSh, lastMax = nil
+  lastGeneration = nil
+  ViewportMetrics.invalidate()
+end
 
 function Layout.metrics(maxAppW)
-  local W, H = 0, 0
-  if love and love.graphics and love.graphics.getDimensions then
-    W, H = GameViewport.dimensions()
-  end
-  local ox, oy, sw, sh = SafeArea.rect()
-  local s = Kit.layout(sw, sh)
+  local viewport = ViewportMetrics.current()
+  local W, H = viewport.width, viewport.height
+  local ox, oy = viewport.safe.x, viewport.safe.y
+  local sw, sh = viewport.safe.width, viewport.safe.height
+  local s = Kit.layout(sw, sh, viewport.textScale)
   if W == lastW and H == lastH and ox == lastOx and oy == lastOy
-      and sw == lastSw and sh == lastSh and maxAppW == lastMax then
+      and sw == lastSw and sh == lastSh and maxAppW == lastMax
+      and viewport.generation == lastGeneration then
     return M
   end
   lastW, lastH, lastOx, lastOy = W, H, ox, oy
   lastSw, lastSh, lastMax = sw, sh, maxAppW
+  lastGeneration = viewport.generation
 
-  local appW = math.min(sw, (maxAppW or 1200) * s)
+  local panes = usableRects(viewport)
+  local primary = panes[1] or {
+    x = ox, y = oy, width = sw, height = sh,
+  }
+  local appW = math.min(primary.width, (maxAppW or 1200) * s)
   local m = M
   m.W, m.H, m.s = W, H, s
-  m.x = math.floor(ox + (sw - appW) / 2)
-  m.top = math.floor(oy)
+  m.x = math.floor(primary.x + (primary.width - appW) / 2)
+  m.top = math.floor(primary.y)
   m.w = math.floor(appW)
-  m.h = math.floor(sh)
+  m.h = math.floor(primary.height)
   m.pad = math.floor(Theme.clamp(appW * 0.03, 10, 24))
   m.gap = math.floor(12 * s)
   m.colGap = math.floor(16 * s)
@@ -68,8 +138,9 @@ function Layout.metrics(maxAppW)
   m.chip = math.max(Kit.tapMin(), math.floor(40 * s))
   m.railH = math.max(3, math.floor(4 * s))
   m.logoH = math.floor(Theme.clamp(sh * 0.10, 36, 84))
-  m.cols = (appW >= Layout.BP.threeCol * s and 3)
-        or (appW >= Layout.BP.twoCol * s and 2)
+  m.cols = viewport.horizontalClass == "compact" and 1
+        or (appW >= Layout.BP.threeCol * s and 3)
+        or (appW >= 560 * s and 2)
         or 1
   m.twoCol = m.cols >= 2
   m.contentW = m.w - 2 * m.pad
@@ -77,6 +148,22 @@ function Layout.metrics(maxAppW)
     and math.floor((m.contentW - m.colGap) / 2)
     or m.contentW
   m.contentX = m.x + m.pad
+  m.horizontalClass = viewport.horizontalClass
+  m.verticalClass = viewport.verticalClass
+  m.textScale = viewport.textScale
+  m.generation = viewport.generation
+  m.safe = viewport.safe
+  m.regions = viewport.regions
+  m.panes = panes
+  m.primaryRect = primary
+  m.duoSplit = #panes > 1
+  m.sidebarRect = nil
+  if m.duoSplit and viewport.horizontalClass == "regular" then
+    local sidebar = panes[2]
+    if sidebar and sidebar.width >= 220 * s and sidebar.height >= 420 * s then
+      m.sidebarRect = sidebar
+    end
+  end
   return m
 end
 

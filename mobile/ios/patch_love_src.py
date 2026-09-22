@@ -170,6 +170,7 @@ int w_syncHealthSteps(lua_State *L)
 
 WRAP_REGISTRATION = """#ifdef LOVE_IOS
 	{ "getDeviceModel", w_getDeviceModel },
+	{ "getWindowMetrics", w_getWindowMetrics },
 	{ "pickFile", w_pickFile },
 	{ "pickFileKinds", w_pickFileKinds },
 	{ "createFile", w_createFile },
@@ -220,6 +221,7 @@ int w_syncHealthSteps(lua_State *L)
 
 WRAP_SYNC_REGISTRATION = """#ifdef LOVE_IOS
 	{ "getDeviceModel", w_getDeviceModel },
+	{ "getWindowMetrics", w_getWindowMetrics },
 	{ "syncHealthSteps", w_syncHealthSteps },
 	{ "httpDownload", w_httpDownload },
 	{ "httpRequest", w_httpRequest },
@@ -241,6 +243,33 @@ int w_getDeviceModel(lua_State *L)
 	}
 	typedef id (*GRObj)(Class, SEL);
 	id value = ((GRObj)objc_msgSend)(cls, sel_registerName("deviceModel"));
+	if (value == nullptr)
+	{
+		lua_pushnil(L);
+		return 1;
+	}
+	typedef const char *(*GRUTF8)(id, SEL);
+	const char *bytes = ((GRUTF8)objc_msgSend)(value,
+	                                           sel_registerName("UTF8String"));
+	if (bytes == nullptr || bytes[0] == '\\0')
+	{
+		lua_pushnil(L);
+		return 1;
+	}
+	lua_pushstring(L, bytes);
+	return 1;
+}
+
+int w_getWindowMetrics(lua_State *L)
+{
+	Class cls = objc_getClass("GRDeviceBridge");
+	if (cls == nullptr)
+	{
+		lua_pushnil(L);
+		return 1;
+	}
+	typedef id (*GRObj)(Class, SEL);
+	id value = ((GRObj)objc_msgSend)(cls, sel_registerName("windowMetricsJSON"));
 	if (value == nullptr)
 	{
 		lua_pushnil(L);

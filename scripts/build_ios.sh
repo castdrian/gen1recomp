@@ -596,7 +596,7 @@ verify_native_bridge() {
   # grep -q here would race pipefail the same way pack_game_love documents:
   # it exits on first match, strings dies of SIGPIPE, the pipeline "fails"
   # nondeterministically.  >/dev/null keeps grep reading the whole stream.
-  for sym in pickFile createFile; do
+  for sym in pickFile createFile getWindowMetrics; do
     strings -a "$bin" | grep -x "$sym" >/dev/null || missing="$missing $sym"
   done
   if [ -n "$missing" ]; then
@@ -605,7 +605,7 @@ verify_native_bridge() {
   mobile/ios/patch_love_src.py did not take. Re-run:
     scripts/build_ios.sh --fetch && scripts/build_ios.sh"
   fi
-  say "native bridge present (pickFile, createFile)"
+  say "native bridge present (pickFile, createFile, getWindowMetrics)"
 }
 
 verify_documents_configuration() {

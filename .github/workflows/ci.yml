@@ -45,7 +45,7 @@ jobs:
             echo "changed=true" >> "$GITHUB_OUTPUT"
             exit 0
           fi
-          if git diff --name-only "$BASE_SHA" "$HEAD_SHA" | grep -Eq '^(mobile/ios/|scripts/build_ios\.sh$)'; then
+          if git diff --name-only "$BASE_SHA" "$HEAD_SHA" | grep -Eq '^(mobile/ios/|scripts/build_ios\.sh$|main\.lua$|src/(core/|ui/|import/LauncherView\.lua))'; then
             echo "changed=true" >> "$GITHUB_OUTPUT"
           else
             echo "changed=false" >> "$GITHUB_OUTPUT"
@@ -97,6 +97,14 @@ jobs:
         with:
           name: gen1recomp++-ios-ipa
           path: dist/ios/gen1recomp++.ipa
+          if-no-files-found: error
+          retention-days: 7
+      - name: upload iOS simulator artifact
+        if: github.repository != 'bryanthaboi/gen1recomp'
+        uses: actions/upload-artifact@v7
+        with:
+          name: gen1recomp++-ios-simulator
+          path: dist/ios/Release-iphonesimulator/gen1recomp++.app
           if-no-files-found: error
           retention-days: 7
       - name: clean up signing keychain
@@ -407,7 +415,7 @@ jobs:
       - name: upload macOS artifact
         uses: actions/upload-artifact@v7
         with:
-          name: gen1recomp-macos
+          name: gen1recomp++-macos
           path: dist/mac/gen1recomp-macos.zip
           if-no-files-found: error
           retention-days: 7

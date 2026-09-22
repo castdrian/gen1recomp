@@ -6472,9 +6472,43 @@ local function drawTabLayer(imp, tabId, x, contentY, w, viewH, availH, m, dx)
   imp.tab = prevTab
 end
 
+local function drawDuoSidebar(imp, m)
+  local rect = m.sidebarRect
+  if not rect then return end
+  local pad = math.max(m.pad, math.floor(16 * m.s))
+  local x, y = rect.x + pad, rect.y + pad
+  local w = rect.width - 2 * pad
+  if w < Kit.tapMin() then return end
+  Theme.fillRounded(rect.x + 6 * m.s, rect.y + 6 * m.s,
+    rect.width - 12 * m.s, rect.height - 12 * m.s, PAL.surface, 1, 14)
+  Kit.textBold("heading", Strings("GAMES"), x, y, PAL.heading)
+  y = y + Kit.textHeight("heading") + math.floor(14 * m.s)
+  local gap = math.floor(8 * m.s)
+  local h = math.max(Kit.tapMin(), math.floor(48 * m.s))
+  for _, game in ipairs(GAME_TABS) do
+    if y + h > rect.y + rect.height - pad then break end
+    btn(imp, x, y, w, h, "duo-game-" .. game.id, Strings(game.label), {
+      face = "tab",
+      color = game.color,
+      active = imp.tab == game.id,
+      align = "left",
+      letter = game.letter,
+      action = function()
+        imp._gamePopup = nil
+        imp:_switchTab(game.id)
+      end,
+    })
+    y = y + h + gap
+  end
+end
+
 function LauncherView.draw(imp)
   ensureState(imp)
   local m = Layout.metrics(1200)
+  if imp._layoutGeneration ~= m.generation then
+    imp._layoutGeneration = m.generation
+    imp._tabRegionRect = nil
+  end
 
   -- The pointer is the pad cursor while it is active, so the ring, hover and
   -- clicks all agree on where "the pointer" is.
@@ -6529,6 +6563,7 @@ function LauncherView.draw(imp)
   imp._modalUpNow = mkey ~= nil
   if imp._modalUpNow then imp:_blurPanelFields() end
   Kit.blockClicks = imp._modalUpNow or Transition.active()
+  drawDuoSidebar(imp, m)
 
   local step = Kit.scrollStep(m.s)
   do
