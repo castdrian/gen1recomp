@@ -1,6 +1,3 @@
-local GameViewport = require("src.render.GameViewport")
-local SafeArea = require("src.core.SafeArea")
-
 local ViewportMetrics = {}
 local cached
 local lastKey
@@ -199,6 +196,32 @@ local function regionValues(value)
   }
 end
 
+local function rawSafeRect(width, height, pixelWidth, pixelHeight)
+  local x, y, w, h = 0, 0, width, height
+  if love and love.window and type(love.window.getSafeArea) == "function" then
+    local ok, rx, ry, rw, rh = pcall(love.window.getSafeArea)
+    if ok and type(rx) == "number" and type(ry) == "number"
+        and type(rw) == "number" and type(rh) == "number"
+        and rw > 0 and rh > 0 then
+      x, y, w, h = rx, ry, rw, rh
+      if (w > width + 0.5 or h > height + 0.5)
+          and pixelWidth > width and pixelHeight > height then
+        local dx = pixelWidth / width
+        local dy = pixelHeight / height
+        if dx > 1.01 or dy > 1.01 then
+          x, w = x / dx, w / dx
+          y, h = y / dy, h / dy
+        end
+      end
+    end
+  end
+  x = clamp(x, 0, width)
+  y = clamp(y, 0, height)
+  w = clamp(w, 1, width - x)
+  h = clamp(h, 1, height - y)
+  return x, y, w, h
+end
+
 local function normalize(source)
   source = type(source) == "table" and source or {}
   local native = type(source.native) == "table" and source.native or {}
@@ -246,25 +269,63 @@ local function normalize(source)
   end
   local textScale = number(native.textScale or source.textScale, 1)
   textScale = clamp(textScale, 0.75, 3)
+  local verticalBarEdge = tostring(native.verticalBarEdge
+    or source.verticalBarEdge or "unspecified")
+  local hinge = type(native.hinge) == "table" and native.hinge
+    or type(source.hinge) == "table" and source.hinge or {}
+  local hingeStatus = tostring(hinge.status or source.hingeStatus or "unknown")
+  local hingeAngle = number(hinge.angle or source.hingeAngle, 0)
   local dpiX = number(native.dpiX or source.dpiX, pixelWidth / width)
   local dpiY = number(native.dpiY or source.dpiY, pixelHeight / height)
   local regions = {}
+  local reservedRegions = {}
   local inputRegions = native.regions or source.regions or source.reservedRegions
   if type(inputRegions) == "table" then
     for _, input in ipairs(inputRegions) do
       local region = regionValues(input)
-      if region and region.active then
+      if region then
         local x1 = clamp(region.x, 0, width)
         local y1 = clamp(region.y, 0, height)
         local x2 = clamp(region.x + region.width, 0, width)
         local y2 = clamp(region.y + region.height, 0, height)
-        if x2 > x1 and y2 > y1 then
+        if x2 >= x1 and y2 >= y1 then
           region.x, region.y = x1, y1
           region.width, region.height = x2 - x1, y2 - y1
-          regions[#regions + 1] = region
+          reservedRegions[#reservedRegions + 1] = region
+          if region.active and x2 > x1 and y2 > y1 then
+            regions[#regions + 1] = region
+          end
         end
       end
     end
+  end
+  local hasFold = false
+  for _, region in ipairs(regions) do
+    if (region.kind == "division" or region.kind == "hinge")
+        and region.width > 0 and region.height > 0 then
+      hasFold = true
+      break
+    end
+  end
+  if not hasFold and (hingeStatus == "partiallyOpen"
+      or hingeStatus == "partially_open" or hingeStatus == "partial") then
+    local gap = math.max(8, math.min(24, math.floor(math.min(width, height) * 0.02)))
+    local region
+    if width >= height then
+      region = {
+        kind = "division",
+        x = math.floor((width - gap) / 2), y = safe.y,
+        width = gap, height = safe.height, active = true,
+      }
+    else
+      region = {
+        kind = "division",
+        x = safe.x, y = math.floor((height - gap) / 2),
+        width = safe.width, height = gap, active = true,
+      }
+    end
+    regions[#regions + 1] = region
+    reservedRegions[#reservedRegions + 1] = region
   end
   table.sort(regions, function(a, b)
     if a.x == b.x then
@@ -279,12 +340,14 @@ local function normalize(source)
     string.format("%.4f", safe.left), string.format("%.4f", safe.top),
     string.format("%.4f", safe.right), string.format("%.4f", safe.bottom),
     horizontalClass, verticalClass, string.format("%.4f", textScale),
+    verticalBarEdge, hingeStatus, string.format("%.4f", hingeAngle),
     tostring(native.scene or source.scene or ""),
     tostring(native.generation or source.generation or ""),
   }, "|")
-  for _, region in ipairs(regions) do
-    key = key .. string.format("|%s:%.4f:%.4f:%.4f:%.4f",
-      region.kind, region.x, region.y, region.width, region.height)
+  for _, region in ipairs(reservedRegions) do
+    key = key .. string.format("|%s:%s:%.4f:%.4f:%.4f:%.4f",
+      region.kind, tostring(region.active), region.x, region.y,
+      region.width, region.height)
   end
   return {
     width = width,
@@ -297,7 +360,10 @@ local function normalize(source)
     horizontalClass = horizontalClass,
     verticalClass = verticalClass,
     regions = regions,
+    reservedRegions = reservedRegions,
     textScale = textScale,
+    verticalBarEdge = verticalBarEdge,
+    hinge = { status = hingeStatus, angle = hingeAngle },
     key = key,
   }
 end
@@ -311,16 +377,17 @@ function ViewportMetrics.current()
   local width, height = 1, 1
   local pixelWidth, pixelHeight = 1, 1
   if love and love.graphics and love.graphics.getDimensions then
-    width, height = GameViewport.dimensions()
-    if GameViewport.pixelDimensions then
-      pixelWidth, pixelHeight = GameViewport.pixelDimensions()
-    elseif love.graphics.getPixelDimensions then
+    width, height = love.graphics.getDimensions()
+    if love.graphics.getPixelDimensions then
       pixelWidth, pixelHeight = love.graphics.getPixelDimensions()
     else
       pixelWidth, pixelHeight = width, height
     end
   end
-  local safeX, safeY, safeWidth, safeHeight = SafeArea.rect()
+  width, height = math.max(1, width), math.max(1, height)
+  pixelWidth, pixelHeight = math.max(1, pixelWidth), math.max(1, pixelHeight)
+  local safeX, safeY, safeWidth, safeHeight = rawSafeRect(
+    width, height, pixelWidth, pixelHeight)
   local value = normalize({
     width = width,
     height = height,
@@ -344,6 +411,125 @@ end
 
 function ViewportMetrics.invalidate()
   cached = nil
+end
+
+local function splitRect(rect, cut)
+  local left = math.max(rect.x, cut.x)
+  local top = math.max(rect.y, cut.y)
+  local right = math.min(rect.x + rect.width, cut.x + cut.width)
+  local bottom = math.min(rect.y + rect.height, cut.y + cut.height)
+  if right <= left or bottom <= top then return { rect } end
+  local pieces = {}
+  local rectRight = rect.x + rect.width
+  local rectBottom = rect.y + rect.height
+  if top > rect.y then
+    pieces[#pieces + 1] = {
+      x = rect.x, y = rect.y, width = rect.width, height = top - rect.y,
+    }
+  end
+  if bottom < rectBottom then
+    pieces[#pieces + 1] = {
+      x = rect.x, y = bottom, width = rect.width,
+      height = rectBottom - bottom,
+    }
+  end
+  if left > rect.x then
+    pieces[#pieces + 1] = {
+      x = rect.x, y = top, width = left - rect.x, height = bottom - top,
+    }
+  end
+  if right < rectRight then
+    pieces[#pieces + 1] = {
+      x = right, y = top, width = rectRight - right, height = bottom - top,
+    }
+  end
+  return pieces
+end
+
+function ViewportMetrics.usableRects(viewport)
+  viewport = viewport or ViewportMetrics.current()
+  local panes = {
+    {
+      x = viewport.safe.x,
+      y = viewport.safe.y,
+      width = viewport.safe.width,
+      height = viewport.safe.height,
+    },
+  }
+  for _, region in ipairs(viewport.regions or {}) do
+    local nextPanes = {}
+    for _, pane in ipairs(panes) do
+      for _, piece in ipairs(splitRect(pane, region)) do
+        if piece.width >= 1 and piece.height >= 1 then
+          nextPanes[#nextPanes + 1] = piece
+        end
+      end
+    end
+    panes = nextPanes
+  end
+  table.sort(panes, function(a, b)
+    local areaA, areaB = a.width * a.height, b.width * b.height
+    if areaA == areaB then
+      if a.y == b.y then return a.x < b.x end
+      return a.y < b.y
+    end
+    return areaA > areaB
+  end)
+  return panes
+end
+
+local function activeFold(viewport)
+  local chosen
+  for _, region in ipairs(viewport.regions or {}) do
+    if (region.kind == "division" or region.kind == "hinge")
+        and region.active ~= false
+        and region.width > 0 and region.height > 0 then
+      if not chosen or region.width * region.height > chosen.width * chosen.height then
+        chosen = region
+      end
+    end
+  end
+  if not chosen then return nil end
+  return chosen, chosen.height >= chosen.width and "vertical" or "horizontal"
+end
+
+local function largestPane(panes, axis, boundary, leading)
+  local best
+  for _, pane in ipairs(panes) do
+    local center = axis == "vertical"
+      and pane.x + pane.width / 2 or pane.y + pane.height / 2
+    local matches
+    if leading then
+      matches = center < boundary
+    else
+      matches = center > boundary
+    end
+    if matches and (not best or pane.width * pane.height > best.width * best.height) then
+      best = pane
+    end
+  end
+  return best
+end
+
+function ViewportMetrics.foldRects(viewport)
+  viewport = viewport or ViewportMetrics.current()
+  local fold, axis = activeFold(viewport)
+  local panes = ViewportMetrics.usableRects(viewport)
+  if not fold or #panes < 2 then return nil, nil, nil, panes end
+  local boundary = axis == "vertical"
+    and fold.x + fold.width / 2 or fold.y + fold.height / 2
+  local leading = largestPane(panes, axis, boundary, true)
+  local trailing = largestPane(panes, axis, boundary, false)
+  if not leading or not trailing then return nil, nil, nil, panes end
+  local content = axis == "vertical" and trailing or leading
+  local controls = axis == "vertical" and leading or trailing
+  return content, controls, axis, panes
+end
+
+function ViewportMetrics.gameplayRects(viewport)
+  viewport = viewport or ViewportMetrics.current()
+  local content, controls, _, panes = ViewportMetrics.foldRects(viewport)
+  return content, controls, panes
 end
 
 return ViewportMetrics

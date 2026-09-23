@@ -38,6 +38,9 @@
 local Input = require("src.core.Input")
 local SafeArea = require("src.core.SafeArea")
 local TouchSkin = require("src.core.TouchSkin")
+local GameViewport = require("src.render.GameViewport")
+local ViewportMetrics = require("src.core.ViewportMetrics")
+local Kit = require("src.ui.kit.Kit")
 
 local TouchControls = {}
 
@@ -222,8 +225,9 @@ function TouchControls.defaultLayout(ww, wh, ox, oy, scale)
   ox, oy = ox or 0, oy or 0
   local short = math.min(ww, wh)
   local dpadW = math.min(180, short * 0.34) * clampScale(scale)
-  local abW = dpadW * 0.46
-  local ssW = dpadW * 0.30
+  local minTouch = math.max(44, Kit.tapMin())
+  local abW = math.max(minTouch, dpadW * 0.46)
+  local ssW = math.max(minTouch, dpadW * 0.30)
   local margin = dpadW * 0.12
   return {
     dpad = { cx = ox + margin + dpadW / 2, cy = oy + wh - margin - dpadW / 2, w = dpadW },
@@ -269,6 +273,7 @@ function TouchControls:init()
   self.held = {}
   self.dpadTouch = nil
   self.layoutW, self.layoutH = nil, nil
+  self.layoutGeneration = nil
   self.skinId = nil
   self.skinError = nil
   self.hotkeysHeld = {}
@@ -309,6 +314,7 @@ function TouchControls:applyOptions(opts)
   self.layouts = cfg.layouts
   self.layoutW, self.layoutH = nil, nil
   self.layoutOx, self.layoutOy = nil, nil
+  self.layoutGeneration = nil
   -- prime positions/scale for the orientation on screen so callers that
   -- read them before the next layout() (editor chrome, tests) see the file
   self:currentBucket()
@@ -355,6 +361,10 @@ function TouchControls:visible()
 end
 
 local function surfaceRect()
+  local control = GameViewport.controlRect()
+  if control then
+    return control.width, control.height, control.x, control.y
+  end
   local r = TouchSkin.surfaceRect
   if r then return r.w, r.h, r.x, r.y end
   if love and love.graphics and love.graphics.getDimensions then
@@ -365,6 +375,17 @@ local function surfaceRect()
 end
 
 TouchControls.surfaceRect = surfaceRect
+
+local function interactionRect()
+  local control = GameViewport.controlRect()
+  if control then
+    return control.x, control.y, control.width, control.height
+  end
+  local panes = ViewportMetrics.usableRects(ViewportMetrics.current())
+  local pane = panes[1]
+  if pane then return pane.x, pane.y, pane.width, pane.height end
+  return SafeArea.windowRect()
+end
 
 function TouchControls:selectSkin(id)
   if id == self.skinId and TouchSkin.active then return TouchSkin.active end
@@ -408,7 +429,7 @@ end
 -- demand.  Mirrors it into self.orientation / self.positions / self.scale,
 -- which layout(), the editor chrome and the tests read.
 function TouchControls:currentBucket()
-  local _, _, sw, sh = SafeArea.windowRect()
+  local _, _, sw, sh = interactionRect()
   local o = orientationFor(sw, sh)
   self.layouts = self.layouts or { portrait = {}, landscape = {} }
   local b = self.layouts[o]
@@ -432,13 +453,16 @@ end
 -- while sizes stay derived from the short edge, times the orientation's
 -- size setting (#633).
 function TouchControls:layout()
-  local ox, oy, sw, sh = SafeArea.windowRect()
+  local ox, oy, sw, sh = interactionRect()
+  local generation = GameViewport.controlGeneration and GameViewport.controlGeneration()
   if self.layoutW == sw and self.layoutH == sh
-     and self.layoutOx == ox and self.layoutOy == oy and self.L then
+     and self.layoutOx == ox and self.layoutOy == oy
+     and self.layoutGeneration == generation and self.L then
     return self.L
   end
   self.layoutW, self.layoutH = sw, sh
   self.layoutOx, self.layoutOy = ox, oy
+  self.layoutGeneration = generation
   -- orientation picks which saved layout applies; rotating swaps buckets
   -- because sw/sh swapped, which is already the cache key above (#633)
   local bucket = self:currentBucket()
@@ -466,7 +490,7 @@ end
 -- Move one control to a screen-space point and persist its normalized
 -- position within the safe rect.  Used by the layout editor while dragging.
 function TouchControls:setControlCenter(name, cx, cy)
-  local ox, oy, sw, sh = SafeArea.windowRect()
+  local ox, oy, sw, sh = interactionRect()
   local L = self:layout()
   local zone = L[name]
   if not zone then return end
@@ -492,6 +516,7 @@ function TouchControls:clearPositions()
   self.scale = 1
   self.layoutW, self.layoutH = nil, nil
   self.layoutOx, self.layoutOy = nil, nil
+  self.layoutGeneration = nil
 end
 
 -- Control size multiplier for the orientation on screen (#633).  Widths and
@@ -504,6 +529,7 @@ function TouchControls:setScale(scale)
   self.scale = bucket.scale
   self.layoutW, self.layoutH = nil, nil
   self.layoutOx, self.layoutOy = nil, nil
+  self.layoutGeneration = nil
   return self.scale
 end
 
@@ -538,7 +564,7 @@ function TouchControls:hotbarStrip()
   local zone = L and L.hotbar
   local items = self:hotbarItems()
   if not zone or #items == 0 then return nil end
-  local ox, oy, sw, sh = SafeArea.windowRect()
+  local ox, oy, sw, sh = interactionRect()
   local h = zone.w * 0.95
   local pad = h * 0.14
   local cw = h * 1.9

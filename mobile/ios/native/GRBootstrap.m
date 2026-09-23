@@ -21,6 +21,10 @@ static IMP GRSceneWillConnectOriginal;
 static IMP GRSceneOpenURLContextsOriginal;
 static IMP GRSceneSetDelegateOriginal;
 static Class GRSceneDelegateClass;
+static id GRHingeInteraction;
+static __weak UIView *GRHingeView;
+static NSInteger GRHingeStatus;
+static CGFloat GRHingeAngle;
 
 static void GRInstallApplicationURLHooks(void);
 static void GRInstallSceneURLHooksForClass(Class sceneDelegateClass);
@@ -65,7 +69,6 @@ static void GRAppendReservedRegions(NSMutableArray *regions, UIView *view,
     if (@available(iOS 27.1, *)) {
         if (![view respondsToSelector:@selector(reservedRegionsOfKind:)]) return;
         for (id region in [view reservedRegionsOfKind:kind]) {
-            if (![region isActive]) continue;
             CGRect frame = [region frame];
             [regions addObject:@{
                 @"kind": name,
@@ -73,6 +76,7 @@ static void GRAppendReservedRegions(NSMutableArray *regions, UIView *view,
                 @"y": @(frame.origin.y),
                 @"width": @(frame.size.width),
                 @"height": @(frame.size.height),
+                @"active": @([region isActive]),
             }];
         }
     }
@@ -121,6 +125,30 @@ static void GRStoreLaunchOptions(NSDictionary *options)
     for (id activity in activities.allValues) {
         if (![activity respondsToSelector:@selector(webpageURL)]) continue;
         GRStoreLaunchURL([activity webpageURL]);
+    }
+}
+
+static void GRInstallHingeInteraction(UIView *view)
+{
+    if (!view) return;
+    if (@available(iOS 27.1, *)) {
+        if (GRHingeView == view && GRHingeInteraction) return;
+        if (GRHingeView && GRHingeInteraction) {
+            [GRHingeView removeInteraction:GRHingeInteraction];
+        }
+        GRHingeView = view;
+        GRHingeStatus = 0;
+        GRHingeAngle = 0;
+        GRHingeInteraction = [[UIHingeInteraction alloc]
+            initWithUpdateHandler:^(UIHingeInteraction *interaction,
+                                     UIHingeInteractionUpdate *update) {
+            UIHinge *hinge = update.hinge;
+            @synchronized ([UIApplication class]) {
+                GRHingeStatus = hinge ? hinge.status : 0;
+                GRHingeAngle = hinge ? hinge.angle : 0;
+            }
+        }];
+        [view addInteraction:GRHingeInteraction];
     }
 }
 
@@ -410,11 +438,35 @@ static void GRInstallApplicationURLHooks(void)
     UIWindowScene *scene = window.windowScene;
     UIView *view = window.rootViewController.view;
     if (!view) return @"{}";
+    GRInstallHingeInteraction(view);
     CGRect bounds = view.bounds;
     UIEdgeInsets insets = view.safeAreaInsets;
     UITraitCollection *traits = scene.traitCollection ?: view.traitCollection;
     CGFloat scale = scene.screen.nativeScale;
-    if (scale <= 0) scale = UIScreen.mainScreen.nativeScale;
+    if (scale <= 0) scale = window.screen.nativeScale;
+    if (scale <= 0) scale = 1.0;
+    NSString *verticalBarEdge = @"unspecified";
+    NSInteger hingeStatus = 0;
+    CGFloat hingeAngle = 0;
+    @synchronized ([UIApplication class]) {
+        hingeStatus = GRHingeStatus;
+        hingeAngle = GRHingeAngle;
+    }
+    if (@available(iOS 27.1, *)) {
+        if (traits.verticalBarEdge == UIVerticalBarEdgeLeading) {
+            verticalBarEdge = @"leading";
+        } else if (traits.verticalBarEdge == UIVerticalBarEdgeTrailing) {
+            verticalBarEdge = @"trailing";
+        }
+    }
+    NSString *hingeStatusName = @"unknown";
+    if (hingeStatus == 1) {
+        hingeStatusName = @"closed";
+    } else if (hingeStatus == 2) {
+        hingeStatusName = @"partiallyOpen";
+    } else if (hingeStatus == 3) {
+        hingeStatusName = @"fullyOpen";
+    }
     NSMutableArray *regions = [NSMutableArray array];
     if (@available(iOS 27.1, *)) {
         GRAppendReservedRegions(regions, view,
@@ -442,6 +494,11 @@ static void GRInstallApplicationURLHooks(void)
         @"verticalClass": traits.verticalSizeClass == UIUserInterfaceSizeClassCompact
             ? @"compact" : @"regular",
         @"textScale": GRTextScale(),
+        @"verticalBarEdge": verticalBarEdge,
+        @"hinge": @{
+            @"status": hingeStatusName,
+            @"angle": @(hingeAngle),
+        },
         @"scene": scene.session.persistentIdentifier ?: @"",
         @"regions": regions,
     };

@@ -4,6 +4,7 @@
 -- pass-through and allocates no canvas.
 
 local Runtime = require("src.mods.Runtime")
+local ViewportMetrics = require("src.core.ViewportMetrics")
 
 local Viewport = {
   rect = nil,
@@ -11,6 +12,8 @@ local Viewport = {
   canvas = nil,
   generation = nil,
   frameActive = false,
+  autoLayout = false,
+  control = nil,
 }
 
 local function finite(value)
@@ -50,22 +53,45 @@ local function sameSize(canvas, w, h)
   return canvas and canvas:getWidth() == w and canvas:getHeight() == h
 end
 
+local function automaticRect(metrics, w, h)
+  local gamePane, controlPane = ViewportMetrics.gameplayRects(metrics)
+  if not gamePane then return nil, nil end
+  return {
+    x = gamePane.x,
+    y = gamePane.y,
+    width = gamePane.width,
+    height = gamePane.height,
+  }, {
+    x = controlPane.x,
+    y = controlPane.y,
+    width = controlPane.width,
+    height = controlPane.height,
+  }
+end
+
 function Viewport.begin(generation)
   local w, h, pw, ph, dpiX, dpiY = realMetrics()
+  local metrics = ViewportMetrics.current()
   local context = {
     width = w, height = h, pixelWidth = pw, pixelHeight = ph,
     dpiX = dpiX, dpiY = dpiY, generation = generation,
+    windowMetrics = metrics,
   }
   local requested
+  local control
   if Runtime.wantsHook("render.viewport") then
     requested = Runtime.call("render.viewport", function(ctx)
       return { x = 0, y = 0, width = ctx.width, height = ctx.height }
     end, context)
+  else
+    requested, control = automaticRect(metrics, w, h)
   end
   local rect = clampRect(requested, w, h)
   Viewport.full = context
   Viewport.rect = rect
+  Viewport.control = control
   Viewport.generation = generation
+  Viewport.autoLayout = control ~= nil
   local active = type(requested) == "table" and requested.capture == true
     or rect.x ~= 0 or rect.y ~= 0
     or rect.width ~= w or rect.height ~= h
@@ -111,6 +137,17 @@ function Viewport.pixelDimensions()
     return love.graphics.getPixelDimensions()
   end
   return love.graphics.getDimensions()
+end
+
+function Viewport.controlRect()
+  if not Viewport.autoLayout or not Viewport.control then return nil end
+  return Viewport.control
+end
+
+function Viewport.controlGeneration()
+  if not Viewport.autoLayout then return nil end
+  return Viewport.full and Viewport.full.windowMetrics
+    and Viewport.full.windowMetrics.generation or Viewport.generation
 end
 
 function Viewport.fullDimensions()
@@ -163,6 +200,7 @@ function Viewport.finish(game)
     windowWidth = full.width, windowHeight = full.height,
     dpiX = full.dpiX, dpiY = full.dpiY,
     generation = Viewport.generation,
+    controlRect = Viewport.control,
   }
   Runtime.call("render.window", function(_, ctx)
     G.setColor(1, 1, 1, 1)
@@ -176,6 +214,8 @@ function Viewport.reset()
   Viewport.rect = nil
   Viewport.full = nil
   Viewport.generation = nil
+  Viewport.autoLayout = false
+  Viewport.control = nil
   if Viewport.canvas and Viewport.canvas.release then
     Viewport.canvas:release()
   end

@@ -1496,16 +1496,15 @@ for _, t in ipairs(HEADER_TABS) do
 end
 
 local function headerTabMetrics(m)
-  local compact = m.horizontalClass == "compact"
-  local gap = math.floor((compact and 4 or 6) * m.s)
+  local gap = math.floor(6 * m.s)
   local width = m.chip
   for _, label in pairs(TAB_LABELS) do
     width = math.max(width, Kit.textWidth("micro", Strings(label)) + 4)
   end
-  local dropW = width + math.floor((compact and 14 or 24) * m.s)
+  local dropW = width + math.floor(24 * m.s)
   local used, rows = dropW, 1
   for _ = 1, #HEADER_TABS do
-    if used + gap + width > m.contentW then rows, used = rows + 1, width
+    if used + gap + width > (m.headerContentW or m.contentW) then rows, used = rows + 1, width
     else used = used + gap + width end
   end
   local labelH = Kit.textHeight("micro") + math.floor(5 * m.s)
@@ -1566,9 +1565,64 @@ local function headerChrome(imp)
   return c
 end
 
+local function buildVerticalHeader(imp, m)
+  local rail = m.verticalBar
+  local width = rail.buttonW
+  local x = rail.x + math.floor((rail.width - width) / 2)
+  local y = rail.top
+  local h = m.chip
+  local gap = rail.gap
+  Theme.fill(rail.x, rail.y, rail.width, rail.height, PAL.surface, 0.34)
+  local edgeX = rail.edge == "leading" and rail.x + rail.width - 1 or rail.x
+  Theme.fill(edgeX, rail.y, 1, rail.height, PAL.line, Theme.A.hairline)
+  local chrome = headerChrome(imp)
+
+  local function nextButton()
+    local by = y
+    y = y + h + gap
+    return by
+  end
+
+  local game = currentGame(imp)
+  chrome.game.color = game.color
+  chrome.game.letter = game.letter
+  chrome.game.letterBold = true
+  chrome.game.active = imp.tab == game.id
+  chrome.game.ring = nil
+  local gameY = nextButton()
+  btn(imp, x, gameY, width, h, "tab-game", "", chrome.game)
+  local cw = math.floor(5 * m.s)
+  local ccx = x + width - math.floor(9 * m.s)
+  local ccy = gameY + h / 2 + (Kit.mouseDown and math.floor(1 * m.s) or 0)
+  Theme.col(chrome.game.active and PAL.inverse or PAL.ink, 0.9)
+  love.graphics.polygon("fill",
+    ccx - cw, ccy - cw * 0.5, ccx + cw, ccy - cw * 0.5,
+    ccx, ccy + cw * 0.8)
+  love.graphics.setColor(1, 1, 1, 1)
+
+  for _, tab in ipairs(HEADER_TABS) do
+    local tabY = nextButton()
+    local opts = tab.opts
+    opts.active = imp.tab == tab.id
+    opts.image = tab.icon
+    opts.action = chrome.tab[tab.id]
+    btn(imp, x, tabY, width, h, tab.key, "", opts)
+  end
+
+  local syncY = nextButton()
+  btn(imp, x, syncY, width, h, "tab-sync", "", chrome.sync)
+  if imp._sync and imp._sync.busy and imp._sync:busy() then
+    Kit.spinner(x + width - math.floor(8 * m.s), syncY + math.floor(8 * m.s),
+      math.max(2, math.floor(4 * m.s)))
+  end
+  local gearY = nextButton()
+  btn(imp, x, gearY, width, h, "gear", "", chrome.gear)
+end
+
 local function buildHeader(imp, m)
   local y = m.top
   Theme.versionRail(m.x, y, m.w, m.railH)
+  local headerW = m.headerW or m.w
   y = y + m.railH
 
   -- logo row
@@ -1583,12 +1637,15 @@ local function buildHeader(imp, m)
   -- overlap at any window size.
   -- iOS has no quit button (the OS owns app exit), so the cluster is the
   -- gear alone and the wordmark gets that width back
-  local clusterN = imp.ios and 2 or 3
+  local vertical = m.verticalBar ~= nil
+  local clusterN = vertical and 0 or (imp.ios and 2 or 3)
   local clusterW = clusterN * gear + (clusterN - 1) * math.floor(6 * m.s) + m.pad
   local mobile = not imp.isNX or not m.twoCol
-  local boxX = mobile and (m.x + m.pad) or (m.x + clusterW)
-  local boxW = mobile and math.max(0, m.w - clusterW - m.pad)
-    or math.max(0, m.w - 2 * clusterW)
+  local boxX = vertical and (m.x + m.pad)
+    or (mobile and (m.x + m.pad) or (m.x + clusterW))
+  local boxW = vertical and math.max(0, headerW - 2 * m.pad)
+    or (mobile and math.max(0, headerW - clusterW - m.pad)
+    or math.max(0, headerW - 2 * clusterW))
   if imp.logo and boxW > 0 then
     local lw, lh = imp.logo:getDimensions()
     local maxW = math.min(320 * m.s, boxW)
@@ -1600,7 +1657,14 @@ local function buildHeader(imp, m)
       Theme.snap(y + (rowH - dh) / 2), 0, scale, scale)
   end
 
-  local rx = m.x + m.w - m.pad
+  if vertical then
+    buildVerticalHeader(imp, m)
+    y = y + rowH + math.floor(8 * m.s)
+    Theme.fill(m.x, y, m.w, 1, PAL.line, Theme.A.hairline)
+    return y + 1
+  end
+
+  local rx = m.x + headerW - m.pad
   local by = y + (rowH - gear) / 2
 
   -- Switch-only: show the running app version opposite the settings gear so
@@ -1652,10 +1716,10 @@ local function buildHeader(imp, m)
   local tabW, dropW, labelH = headerTabMetrics(m)
   local tabH = m.chip
   local tx = m.x + m.pad
-  local ty = y + math.floor(6 * m.s)
+  local ty = y + math.floor(6 * m.s) + (m.headerTabOffset or 0)
   local tabLeft = tx
   local tabRight = m.x + m.w - m.pad
-  local tabGap = math.floor((m.horizontalClass == "compact" and 4 or 6) * m.s)
+  local tabGap = math.floor(6 * m.s)
   local tabRowGap = math.floor(4 * m.s)
 
   -- the cartridge dropdown: just the game's initial and the caret; the
@@ -3700,6 +3764,20 @@ end
 local modalRect = { x = 0, y = 0, w = 0, h = 0 }
 local modalTransform = false
 
+function LauncherView.modalFrame(m)
+  return m.modalX or 0, m.modalY or 0, m.modalW or m.W, m.modalH or m.H
+end
+
+function LauncherView.modalWidth(m)
+  local _, _, width = LauncherView.modalFrame(m)
+  return width
+end
+
+function LauncherView.modalHeight(m)
+  local _, _, _, height = LauncherView.modalFrame(m)
+  return height
+end
+
 local function modalAmount()
   local L = Transition.get("modal")
   if not L then return 1 end
@@ -3715,19 +3793,21 @@ local function modalPanel(m, w, h)
   -- the logo"); at this weight the page behind is present but plainly out of
   -- play, which is what a modal is supposed to say.
   local amt = modalAmount()
-  Theme.fill(0, 0, m.W, m.H, PAL.bg, 0.93 * amt)
+  local mx, my, mw, mh = LauncherView.modalFrame(m)
+  Theme.fill(m.fullX or mx, m.fullY or my, m.fullW or mw, m.fullH or mh,
+    PAL.bg, 0.93 * amt)
   Kit.blockClicks = true
-  local pw = math.floor(math.min(w, m.W - 2 * m.pad))
-  local ph = math.floor(math.min(h, m.H - 2 * m.pad))
-  local px = math.floor((m.W - pw) / 2)
-  local py = math.floor((m.H - ph) / 2)
+  local pw = math.floor(math.min(w, mw - 2 * m.pad))
+  local ph = math.floor(math.min(h, mh - 2 * m.pad))
+  local px = math.floor(mx + (mw - pw) / 2)
+  local py = math.floor(my + (mh - ph) / 2)
   modalRect.x, modalRect.y, modalRect.w, modalRect.h = px, py, pw, ph
   if amt < 1 and love.graphics and love.graphics.push then
     local s = 0.96 + 0.04 * amt
     love.graphics.push()
-    love.graphics.translate(m.W / 2, m.H / 2)
+    love.graphics.translate(mx + mw / 2, my + mh / 2)
     love.graphics.scale(s, s)
-    love.graphics.translate(-m.W / 2, -m.H / 2)
+    love.graphics.translate(-mx - mw / 2, -my - mh / 2)
     modalTransform = true
   end
   Kit.card(px, py, pw, ph, true)
@@ -3788,7 +3868,7 @@ local function buildSaveExport(imp, m)
   local supported = state.scope == state.version
     and require("src.save_convert.SaveConvert").exportSupported(state.version)
   local pad, gap = math.floor(18 * m.s), math.floor(10 * m.s)
-  local w = math.min(math.floor(440 * m.s), m.W - 2 * m.pad)
+  local w = math.min(math.floor(440 * m.s), LauncherView.modalWidth(m) - 2 * m.pad)
   local inner = w - 2 * pad
   local hint = Strings("Choose a format for %s.", state.label)
   local original = Strings("The original launcher save, with all of its data preserved.")
@@ -4006,7 +4086,7 @@ end
 local function buildTextModal(imp, m, key, title, body, closeFn)
   local pad = math.floor(18 * m.s)
   local w = math.floor(520 * m.s)
-  local h = math.floor(math.min(m.H - 2 * m.pad, 460 * m.s))
+  local h = math.floor(math.min(LauncherView.modalHeight(m) - 2 * m.pad, 460 * m.s))
   local px, py, pw, ph = modalPanel(m, w, h)
   local cy = py + pad
   local xW = math.max(Kit.tapMin(), math.floor(30 * m.s))
@@ -4042,7 +4122,7 @@ local function buildVersionsModal(imp, m)
   local v = imp._modVersions
   local pad = math.floor(18 * m.s)
   local w = math.floor(520 * m.s)
-  local h = math.floor(math.min(m.H - 2 * m.pad, 480 * m.s))
+  local h = math.floor(math.min(LauncherView.modalHeight(m) - 2 * m.pad, 480 * m.s))
   local px, py, pw, ph = modalPanel(m, w, h)
   local cy = py + pad
   Kit.text("button", Kit.ellipsize("button",
@@ -4324,7 +4404,7 @@ local function buildModHeaderActionsModal(imp, m)
       action = function() imp:_setAllMods(false) end },
     { label = Strings("Sort mods..."), action = function() imp._sortPopup = "mods" end },
   }
-  local noteW = math.floor(math.min(w, m.W - 2 * m.pad)) - 2 * pad
+  local noteW = math.floor(math.min(w, LauncherView.modalWidth(m) - 2 * m.pad)) - 2 * pad
   local noteH = note
     and (Kit.wrapHeight("small", note, noteW, 3) + gap) or 0
   local h = pad + Kit.textHeight("button") + math.floor(12 * m.s) + noteH
@@ -4423,7 +4503,7 @@ end
 local function buildGameModal(imp, m)
   local pad = math.floor(18 * m.s)
   local headH = Kit.textHeight("button") + math.floor(12 * m.s)
-  local avail = m.H - 2 * m.pad
+  local avail = LauncherView.modalHeight(m) - 2 * m.pad
   local cols, gap, btnH = 2, math.floor(8 * m.s), m.btnH
   local function rows() return math.ceil(#GAME_TABS / cols) + 1 end
   local function total() return 2 * pad + headH + rows() * btnH
@@ -4482,7 +4562,7 @@ local function buildCartModal(imp, m)
     imp._cartPicker = state
   end
   local pad, gap = math.floor(16 * m.s), math.floor(8 * m.s)
-  local w = math.min(math.floor(480 * m.s), m.W - 2 * m.pad)
+  local w = math.min(math.floor(480 * m.s), LauncherView.modalWidth(m) - 2 * m.pad)
   local inner = w - 2 * pad
   local canWebClip = webClipAvailable(imp)
   local iconExtra = math.floor(m.btnH * 0.42) + math.floor(7 * Kit.scale)
@@ -5140,7 +5220,7 @@ local function buildFindEntryModal(imp, m)
     + nBtns * (m.btnH + gap) - gap + pad
   local image = imp._findThumb and imp:_findThumb(entry)
   local imageH = image and math.max(0, math.min(math.floor(200 * m.s),
-    m.H - 2 * m.pad - h - gap)) or 0
+    LauncherView.modalHeight(m) - 2 * m.pad - h - gap)) or 0
   local px, py, pw = modalPanel(m, w, h + (imageH > 0 and imageH + gap or 0))
   local cy = py + pad
   if imageH > 0 then
@@ -5310,7 +5390,7 @@ local function buildBugModal(imp, m)
   local pad = math.floor(18 * m.s)
   local w = math.floor(560 * m.s)
   local btnH = math.max(m.btnH, Kit.tapMin())
-  local h = math.floor(math.min(m.H - 2 * m.pad, 420 * m.s))
+  local h = math.floor(math.min(LauncherView.modalHeight(m) - 2 * m.pad, 420 * m.s))
   local px, py, pw, ph = modalPanel(m, w, h)
   buildBugPanel(imp, px + pad, py + pad, pw - 2 * pad,
     ph - 2 * pad - btnH - m.gap, m)
@@ -5324,7 +5404,7 @@ local function buildSettingsModal(imp, m)
   local SaveData = require("src.core.SaveData")
   local pad, gap = math.floor(18 * m.s), math.floor(8 * m.s)
   local px, py, pw, ph = modalPanel(m, math.floor(600 * m.s),
-    math.floor(math.min(m.H - 2 * m.pad, m.H * 0.92)))
+    math.floor(math.min(LauncherView.modalHeight(m) - 2 * m.pad, LauncherView.modalHeight(m) * 0.92)))
   local x, cy, width = px + pad, py + pad, pw - 2 * pad
   Kit.textBold("title", Strings("Settings"), x, cy, PAL.heading)
   Kit.text("small", Strings("Saved automatically"), x,
@@ -5491,7 +5571,7 @@ local function buildDepResolverModal(imp, m)
   local itemsH = math.min(totalContentH > 0 and totalContentH or rowH, listMaxH)
   local footerH = math.floor(10 * m.s) + m.btnH
   local wantedH = pad + headerH + warnTotalH + itemsH + footerH + pad
-  local h = math.floor(math.min(m.H - 2 * m.pad, math.max(260 * m.s, wantedH)))
+  local h = math.floor(math.min(LauncherView.modalHeight(m) - 2 * m.pad, math.max(260 * m.s, wantedH)))
 
   local px, py, pw, ph = modalPanel(m, w, h)
   local cy = py + pad
@@ -5705,12 +5785,12 @@ local function syncTitle(imp, m, px, py, pw, pad)
 end
 
 local function syncWidth(m, want)
-  return math.floor(math.min(want, m.W - 2 * m.pad))
+  return math.floor(math.min(want, LauncherView.modalWidth(m) - 2 * m.pad))
 end
 
 local function syncFit(m, fixed, rows, gaps, texts)
   local fit = { btnH = m.btnH, gap = math.floor(8 * m.s), lines = {} }
-  local avail = m.H - 2 * m.pad
+  local avail = LauncherView.modalHeight(m) - 2 * m.pad
   texts = texts or {}
   for i, blk in ipairs(texts) do fit.lines[i] = blk.max end
   local function total()
@@ -6411,10 +6491,14 @@ end
 -- whether the window is tall enough BEFORE anything draws.  Keep in sync
 -- with buildHeader (rail, logo row, tab row, hairline).
 local function headerHeight(m)
+  if m.verticalBar then
+    return m.railH + m.logoH + math.floor(12 * m.s)
+      + math.floor(8 * m.s) + 1
+  end
   local _, _, labelH, rows = headerTabMetrics(m)
   return m.railH + m.logoH + math.floor(12 * m.s) + math.floor(6 * m.s)
     + rows * (m.chip + labelH) + (rows - 1) * math.floor(4 * m.s)
-    + math.floor(8 * m.s) + 1
+    + math.floor(8 * m.s) + (m.headerTabOffset or 0) + 1
 end
 
 -- The panel space a tab needs to lay out without crushing itself.  Below
@@ -6491,16 +6575,25 @@ local function drawDuoGamePane(imp, m)
   Kit.textBold("heading", Strings("GAMES"), x, y, PAL.heading)
   local gridY = y + Kit.textHeight("heading") + math.floor(14 * m.s)
   local gap = math.floor(8 * m.s)
-  local columns = math.max(1, math.floor((w + gap) / (180 * m.s)))
+  local columns = math.max(1, math.floor((w + gap) / (132 * m.s)))
   columns = math.min(columns, #GAME_TABS)
   local cellW = math.floor((w - gap * (columns - 1)) / columns)
-  local h = math.max(Kit.tapMin(), math.floor(52 * m.s))
+  local h = math.max(Kit.tapMin(), math.floor(48 * m.s))
+  local rows = math.ceil(#GAME_TABS / columns)
+  local contentH = rows * h + math.max(0, rows - 1) * gap
+  local viewH = math.max(0, rect.y + rect.height - pad - gridY)
+  local maxScroll = Kit.scrollExtent(contentH, viewH)
+  local scroll = Kit.scrollInput(imp._duoGameScroll or 0, maxScroll,
+    rect.x + inset, gridY, rect.width - 2 * inset, viewH)
+  imp._duoGameScroll = scroll
+  imp._duoGameScrollMax = maxScroll
+  local drawY = Kit.scrollBegin(rect.x + inset, gridY,
+    rect.width - 2 * inset, viewH, scroll, maxScroll)
   for index, game in ipairs(GAME_TABS) do
     local column = (index - 1) % columns
     local row = math.floor((index - 1) / columns)
     local bx = x + column * (cellW + gap)
-    local by = gridY + row * (h + gap)
-    if by + h > rect.y + rect.height - pad then break end
+    local by = drawY + row * (h + gap)
     btn(imp, bx, by, cellW, h, "duo-game-" .. game.id, Strings(game.label), {
       face = "tab",
       color = game.color,
@@ -6513,6 +6606,8 @@ local function drawDuoGamePane(imp, m)
       end,
     })
   end
+  Kit.scrollEnd(rect.x + inset, gridY, rect.width - 2 * inset, viewH,
+    scroll, maxScroll, PAL.surface)
 end
 
 function LauncherView.draw(imp)
@@ -6658,7 +6753,7 @@ function LauncherView.draw(imp)
   end
 
   if imp._launchFade then
-    Theme.fill(0, 0, m.W, m.H, PAL.bg,
+    Theme.fill(m.x, m.top, m.w, m.h, PAL.bg,
       math.min(1, imp._launchFade.elapsed / imp._launchFade.duration))
   end
 
@@ -6680,8 +6775,8 @@ function LauncherView.draw(imp)
       local msg = imp._cursorModeToast
       local tw = Kit.textWidth("small", msg) + 36 * m.s
       local th = 34 * m.s
-      local tx = (m.W - tw) / 2
-      local ty = 16 * m.s
+      local tx = m.x + (m.w - tw) / 2
+      local ty = m.top + 16 * m.s
       Theme.fillRounded(tx, ty, tw, th, PAL.surface, 0.95 * alpha, 6)
       Theme.strokeRounded(tx - 2, ty - 2, tw + 4, th + 4, PAL.railBlue, 0.35 * alpha, 2, 8)
       Theme.strokeRounded(tx, ty, tw, th, PAL.lineStrong, 0.85 * alpha, 1.5, 6)

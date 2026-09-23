@@ -16,69 +16,10 @@
 
 local Kit = require("src.ui.kit.Kit")
 local Theme = require("src.ui.kit.Theme")
+local Strings = require("src.core.Strings")
 local ViewportMetrics = require("src.core.ViewportMetrics")
 
 local Layout = {}
-
-local function splitRect(rect, cut)
-  local left = math.max(rect.x, cut.x)
-  local top = math.max(rect.y, cut.y)
-  local right = math.min(rect.x + rect.width, cut.x + cut.width)
-  local bottom = math.min(rect.y + rect.height, cut.y + cut.height)
-  if right <= left or bottom <= top then return { rect } end
-
-  local pieces = {}
-  local rectRight = rect.x + rect.width
-  local rectBottom = rect.y + rect.height
-  if top > rect.y then
-    pieces[#pieces + 1] = {
-      x = rect.x, y = rect.y, width = rect.width, height = top - rect.y,
-    }
-  end
-  if bottom < rectBottom then
-    pieces[#pieces + 1] = {
-      x = rect.x, y = bottom, width = rect.width,
-      height = rectBottom - bottom,
-    }
-  end
-  if left > rect.x then
-    pieces[#pieces + 1] = {
-      x = rect.x, y = top, width = left - rect.x, height = bottom - top,
-    }
-  end
-  if right < rectRight then
-    pieces[#pieces + 1] = {
-      x = right, y = top, width = rectRight - right, height = bottom - top,
-    }
-  end
-  return pieces
-end
-
-local function usableRects(viewport)
-  local panes = {
-    {
-      x = viewport.safe.x,
-      y = viewport.safe.y,
-      width = viewport.safe.width,
-      height = viewport.safe.height,
-    },
-  }
-  for _, region in ipairs(viewport.regions or {}) do
-    local nextPanes = {}
-    for _, pane in ipairs(panes) do
-      for _, piece in ipairs(splitRect(pane, region)) do
-        if piece.width >= 1 and piece.height >= 1 then
-          nextPanes[#nextPanes + 1] = piece
-        end
-      end
-    end
-    panes = nextPanes
-  end
-  table.sort(panes, function(a, b)
-    return a.width * a.height > b.width * b.height
-  end)
-  return panes
-end
 
 local function paneAxis(panes)
   if #panes < 2 then return nil end
@@ -90,6 +31,88 @@ local function paneAxis(panes)
   local sameWidth = math.abs(primary.width - secondary.width) <= 4
   if sameLeft and sameWidth then return "horizontal" end
   return nil
+end
+
+local function headerRowCount(m)
+  local gap = math.floor(6 * m.s)
+  local width = m.chip
+  for _, label in ipairs({ "MODS", "FIND", "ONLINE", "SKINS", "IMPORT" }) do
+    width = math.max(width, Kit.textWidth("micro", Strings(label)) + 4)
+  end
+  local dropW = width + math.floor(24 * m.s)
+  local used, rows = dropW, 1
+  for _ = 1, 5 do
+    if used + gap + width > m.headerContentW then
+      rows, used = rows + 1, width
+    else
+      used = used + gap + width
+    end
+  end
+  return rows
+end
+
+local function headerWidth(viewport, x, width)
+  local limit = width
+  for _, region in ipairs(viewport.regions or {}) do
+    local camera = region.kind == "occlusion" or region.kind == "camera"
+    local edge = region.x + region.width
+    if camera and region.active and region.width >= 8 and region.height >= 8
+        and region.y <= 0.5 and region.x > x
+        and edge >= viewport.width - 0.5 then
+      limit = math.min(limit, region.x - x)
+    end
+  end
+  return math.max(1, limit)
+end
+
+local function verticalBar(viewport, safe)
+  if viewport.horizontalClass ~= "compact" then return nil end
+  local leftInset = safe.x
+  local rightInset = viewport.width - safe.x - safe.width
+  local edge = viewport.verticalBarEdge
+  local side, sideWidth
+  if edge == "leading" then
+    side, sideWidth = "leading", leftInset
+  elseif edge == "trailing" then
+    side, sideWidth = "trailing", rightInset
+  else
+    for _, region in ipairs(viewport.regions or {}) do
+      local right = region.x + region.width
+      local topRegion = region.active and region.y <= 0.5
+        and region.height >= 8 and region.width >= 8
+      if topRegion and right >= viewport.width - 0.5
+          and rightInset >= 48 then
+        side, sideWidth = "trailing", rightInset
+        break
+      end
+      if topRegion and region.x <= 0.5 and leftInset >= 48 then
+        side, sideWidth = "leading", leftInset
+        break
+      end
+    end
+  end
+  if not side or sideWidth < 48 then return nil end
+  local x = side == "leading" and 0 or viewport.width - sideWidth
+  return {
+    x = x,
+    y = safe.y,
+    width = sideWidth,
+    height = safe.height,
+    edge = side,
+  }
+end
+
+local function verticalBarTop(viewport, bar, gap)
+  local top = bar.y + gap
+  for _, region in ipairs(viewport.regions or {}) do
+    local right = region.x + region.width
+    local inBar = region.active and region.x < bar.x + bar.width
+      and right > bar.x and region.y <= bar.y + 0.5
+    if inBar and region.height >= 8 then
+      top = math.max(top, region.y + region.height + gap)
+    end
+  end
+  return math.min(top, bar.y + bar.height - gap)
 end
 
 -- Breakpoints, in safe-area pixels.  Named so panels read intent rather than
@@ -121,12 +144,17 @@ function Layout.metrics(maxAppW)
   local W, H = viewport.width, viewport.height
   local ox, oy = viewport.safe.x, viewport.safe.y
   local sw, sh = viewport.safe.width, viewport.safe.height
-  local panes = usableRects(viewport)
-  local primary = panes[1] or {
+  local foldContent, foldControls, foldAxis, panes = ViewportMetrics.foldRects(viewport)
+  local safeRect = {
     x = ox, y = oy, width = sw, height = sh,
   }
-  local axis = paneAxis(panes)
-  local s = Kit.layout(primary.width, primary.height, viewport.textScale)
+  local primary = foldContent or safeRect
+  local axis = foldAxis or paneAxis(panes)
+  local hasDivision = foldContent ~= nil and foldControls ~= nil
+  local base = hasDivision and primary or {
+    x = ox, y = oy, width = sw, height = sh,
+  }
+  local s = Kit.layout(base.width, base.height, viewport.textScale)
   if W == lastW and H == lastH and ox == lastOx and oy == lastOy
       and sw == lastSw and sh == lastSh and maxAppW == lastMax
       and viewport.generation == lastGeneration then
@@ -136,13 +164,14 @@ function Layout.metrics(maxAppW)
   lastSw, lastSh, lastMax = sw, sh, maxAppW
   lastGeneration = viewport.generation
 
-  local appW = math.min(primary.width, (maxAppW or 1200) * s)
+  local appW = math.min(base.width, (maxAppW or 1200) * s)
   local m = M
   m.W, m.H, m.s = W, H, s
-  m.x = math.floor(primary.x + (primary.width - appW) / 2)
-  m.top = math.floor(primary.y)
+  m.fullX, m.fullY, m.fullW, m.fullH = 0, 0, W, H
+  m.x = math.floor(base.x + (base.width - appW) / 2)
+  m.top = math.floor(base.y)
   m.w = math.floor(appW)
-  m.h = math.floor(primary.height)
+  m.h = math.floor(base.height)
   m.pad = math.floor(Theme.clamp(appW * 0.03, 10, 24))
   m.gap = math.floor(12 * s)
   m.colGap = math.floor(16 * s)
@@ -150,35 +179,93 @@ function Layout.metrics(maxAppW)
   m.btnH = math.max(Kit.tapMin(), math.floor(38 * s))
   m.chip = math.max(Kit.tapMin(), math.floor(40 * s))
   m.railH = math.max(3, math.floor(4 * s))
-  m.logoH = math.floor(Theme.clamp(primary.height * 0.10, 36, 84))
-  m.cols = viewport.horizontalClass == "compact" and 1
-        or (appW >= Layout.BP.threeCol * s and 3)
-        or (appW >= 560 * s and 2)
-        or 1
-  m.twoCol = m.cols >= 2
-  m.contentW = m.w - 2 * m.pad
-  m.colW = m.twoCol
-    and math.floor((m.contentW - m.colGap) / 2)
-    or m.contentW
+  m.logoH = math.floor(Theme.clamp(base.height * 0.10, 36, 84))
+  m.headerW = headerWidth(viewport, m.x, m.w)
+  m.headerTabOffset = 0
+  local tabStart = m.top + m.railH + m.logoH + math.floor(12 * s)
+    + math.floor(6 * s)
+  for _, region in ipairs(viewport.regions or {}) do
+    local camera = region.kind == "occlusion" or region.kind == "camera"
+    local edge = region.x + region.width
+    if camera and region.active and region.width >= 8 and region.height >= 8
+        and region.y <= m.top + 0.5
+        and edge >= viewport.width - 0.5 then
+      m.headerTabOffset = math.max(m.headerTabOffset,
+        region.y + region.height + math.floor(6 * s) - tabStart)
+    end
+  end
+  m.headerTabOffset = math.max(0, math.floor(m.headerTabOffset))
+  m.headerContentW = m.w - 2 * m.pad
   m.contentX = m.x + m.pad
+  m.contentW = m.w - 2 * m.pad
   m.horizontalClass = viewport.horizontalClass
   m.verticalClass = viewport.verticalClass
   m.textScale = viewport.textScale
   m.generation = viewport.generation
   m.safe = viewport.safe
+  m.verticalBar = verticalBar(viewport, safeRect)
+  if m.verticalBar then
+    m.verticalBar.top = verticalBarTop(viewport, m.verticalBar,
+      math.floor(6 * s))
+    m.verticalBar.gap = math.floor(6 * s)
+    m.verticalBar.buttonW = math.max(1, math.min(m.chip,
+      m.verticalBar.width - math.floor(8 * s)))
+  end
+  local modalBase = hasDivision and base or (panes[1] or safeRect)
+  m.modalX = modalBase.x
+  m.modalY = modalBase.y
+  m.modalW = modalBase.width
+  m.modalH = modalBase.height
   m.regions = viewport.regions
+  m.reservedRegions = viewport.reservedRegions
   m.panes = panes
   m.primaryRect = primary
-  m.secondaryRect = panes[2]
-  m.duoAxis = axis
-  m.duoSplit = #panes > 1
+  m.secondaryRect = foldControls or panes[2]
+  m.duoAxis = hasDivision and foldAxis or nil
+  m.duoSplit = hasDivision
   m.sidebarRect = nil
-  if axis == "vertical" and viewport.horizontalClass == "regular" then
-    local sidebar = panes[2]
+  m.internalSidebar = false
+  if hasDivision and foldAxis == "vertical" and viewport.horizontalClass == "regular" then
+    local sidebar = foldControls
     if sidebar and sidebar.width >= 220 * s and sidebar.height >= 320 * s then
       m.sidebarRect = sidebar
     end
   end
+  local headerRows = m.verticalBar and 0 or headerRowCount(m)
+  local headerReserve = m.railH + m.logoH + math.floor(12 * s)
+    + (m.verticalBar and 0 or math.floor(6 * s))
+    + headerRows * (m.chip + Kit.textHeight("micro"))
+    + (headerRows > 1 and (headerRows - 1) * math.floor(4 * s) or 0)
+    + math.floor(8 * s)
+    + (m.verticalBar and 0 or m.headerTabOffset) + 1
+  if not m.sidebarRect and not hasDivision
+      and viewport.horizontalClass == "regular"
+      and base.height - headerReserve >= 220 * s then
+    local sidebarW = Theme.clamp(appW * 0.28, 145 * s, 224 * s)
+    local sidebarGap = math.floor(16 * s)
+    local bodyW = appW - 2 * m.pad - sidebarW - sidebarGap
+    if bodyW >= 288 * s then
+      m.sidebarRect = {
+        x = m.x + m.pad,
+        y = base.y + headerReserve + math.floor(8 * s),
+        width = sidebarW,
+        height = base.height - headerReserve - math.floor(8 * s),
+      }
+      m.contentX = m.x + m.pad + sidebarW + sidebarGap
+      m.contentW = bodyW
+      m.internalSidebar = true
+    end
+  end
+  m.cols = viewport.horizontalClass == "compact" and 1
+        or (m.contentW >= Layout.BP.threeCol * s and 3)
+        or (m.contentW >= 560 * s and 2)
+        or 1
+  m.twoCol = m.cols >= 2
+  m.colW = m.twoCol
+    and math.floor((m.contentW - m.colGap) / 2)
+    or m.contentW
+  m.layoutMode = viewport.horizontalClass == "compact" and "compact"
+    or (m.duoSplit and "folded" or "regular")
   return m
 end
 
