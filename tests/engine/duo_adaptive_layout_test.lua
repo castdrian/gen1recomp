@@ -191,9 +191,11 @@ ViewportMetrics.invalidate()
 Layout.invalidate()
 local foldedLayout = Layout.metrics(1200)
 check(foldedLayout.duoSplit, "folded inner display uses a split layout")
-eq(foldedLayout.x, 495, "folded content uses the trailing pane")
-eq(foldedLayout.modalX, 495.5, "folded modals stay in the content pane")
-eq(foldedLayout.secondaryRect.x, 0, "folded controls use the leading pane")
+eq(foldedLayout.x, 0, "uneven folded content uses the larger pane")
+eq(foldedLayout.modalX, 0, "folded modals stay in the content pane")
+eq(foldedLayout.secondaryRect.x, 495.5, "folded controls use the narrow pane")
+eq(foldedLayout.contentW < 500, true, "folded content keeps the larger pane bounded")
+eq(foldedLayout.paneHorizontalClass, "compact", "uneven folded content uses compact reflow")
 love.graphics.getDimensions = function() return 466, 678 end
 love.graphics.getPixelDimensions = function() return 1398, 2034 end
 love.window.getSafeArea = function() return 0, 0, 382, 644 end

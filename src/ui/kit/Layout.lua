@@ -155,6 +155,10 @@ function Layout.metrics(maxAppW)
     x = ox, y = oy, width = sw, height = sh,
   }
   local s = Kit.layout(base.width, base.height, viewport.textScale)
+  local paneHorizontalClass = viewport.horizontalClass
+  if paneHorizontalClass == "regular" and base.width < 560 then
+    paneHorizontalClass = "compact"
+  end
   if W == lastW and H == lastH and ox == lastOx and oy == lastOy
       and sw == lastSw and sh == lastSh and maxAppW == lastMax
       and viewport.generation == lastGeneration then
@@ -199,6 +203,7 @@ function Layout.metrics(maxAppW)
   m.contentX = m.x + m.pad
   m.contentW = m.w - 2 * m.pad
   m.horizontalClass = viewport.horizontalClass
+  m.paneHorizontalClass = paneHorizontalClass
   m.verticalClass = viewport.verticalClass
   m.textScale = viewport.textScale
   m.generation = viewport.generation
@@ -256,7 +261,7 @@ function Layout.metrics(maxAppW)
       m.internalSidebar = true
     end
   end
-  m.cols = viewport.horizontalClass == "compact" and 1
+  m.cols = paneHorizontalClass == "compact" and 1
         or (m.contentW >= Layout.BP.threeCol * s and 3)
         or (m.contentW >= 560 * s and 2)
         or 1
@@ -264,7 +269,7 @@ function Layout.metrics(maxAppW)
   m.colW = m.twoCol
     and math.floor((m.contentW - m.colGap) / 2)
     or m.contentW
-  m.layoutMode = viewport.horizontalClass == "compact" and "compact"
+  m.layoutMode = paneHorizontalClass == "compact" and "compact"
     or (m.duoSplit and "folded" or "regular")
   return m
 end

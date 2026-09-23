@@ -1191,29 +1191,32 @@ function Kit.scrollInput(offset, maxScroll, x, y, w, h)
   return at
 end
 
-function Kit.scrollBegin(x, y, w, h, offset, maxScroll)
-  Kit.pushClip(x, y, math.max(0, w or 0), math.max(0, h or 0))
+function Kit.scrollBegin(x, y, w, h, offset, maxScroll, clipY, clipH)
+  Kit.pushClip(x, clipY or y, math.max(0, w or 0),
+    math.max(0, clipH or h or 0))
   return y - Kit.scrollClamp(offset, maxScroll)
 end
 
-function Kit.scrollEnd(x, y, w, h, offset, maxScroll, background)
+function Kit.scrollEnd(x, y, w, h, offset, maxScroll, background, clipY, clipH)
+  local fadeY = clipY or y
+  local fadeH = clipH or h
   if (maxScroll or 0) > (offset or 0) + 1 and h > 0 then
-    local fadeH = math.min(math.floor(24 * Kit.scale), math.floor(h / 4))
-    local strength = math.min(1, (maxScroll - (offset or 0)) / math.max(1, fadeH))
-    for i = 0, fadeH - 1 do
-      Theme.fill(x, y + h - fadeH + i, w - Kit.scrollGutter(), 1,
+    local fade = math.min(math.floor(24 * Kit.scale), math.floor(fadeH / 4))
+    local strength = math.min(1, (maxScroll - (offset or 0)) / math.max(1, fade))
+    for i = 0, fade - 1 do
+      Theme.fill(x, fadeY + fadeH - fade + i, w - Kit.scrollGutter(), 1,
         background or PAL.field, strength * ((i + 1) / fadeH) ^ 2)
     end
   end
   Kit.popClip()
-  if (maxScroll or 0) <= 0 or (h or 0) <= 0 or (w or 0) <= 0 then return end
+  if (maxScroll or 0) <= 0 or fadeH <= 0 or (w or 0) <= 0 then return end
   local barW = Kit.scrollBarW()
   local barX = x + w - barW
   local at = Kit.scrollClamp(offset, maxScroll)
   local thumbH = math.max(math.floor(20 * Kit.scale),
-    math.floor(h * (h / (h + maxScroll))))
-  local thumbY = y + (h - thumbH) * (at / maxScroll)
-  Theme.fill(barX, y, barW, h, PAL.bg, 0.35)
+    math.floor(fadeH * (fadeH / (fadeH + maxScroll))))
+  local thumbY = fadeY + (fadeH - thumbH) * (at / maxScroll)
+  Theme.fill(barX, fadeY, barW, fadeH, PAL.bg, 0.35)
   Theme.fill(barX, thumbY, barW, thumbH, PAL.muted, 0.7)
 end
 

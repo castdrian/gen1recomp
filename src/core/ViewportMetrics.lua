@@ -511,6 +511,20 @@ local function largestPane(panes, axis, boundary, leading)
   return best
 end
 
+local function foldPaneChoice(leading, trailing, axis)
+  if not leading or not trailing then return leading, trailing end
+  local leadingSize = axis == "vertical" and leading.width or leading.height
+  local trailingSize = axis == "vertical" and trailing.width or trailing.height
+  local larger = math.max(leadingSize, trailingSize)
+  local smaller = math.min(leadingSize, trailingSize)
+  if smaller > 0 and larger >= smaller * 1.45 then
+    if leadingSize > trailingSize then return leading, trailing end
+    return trailing, leading
+  end
+  if axis == "vertical" then return trailing, leading end
+  return leading, trailing
+end
+
 function ViewportMetrics.foldRects(viewport)
   viewport = viewport or ViewportMetrics.current()
   local fold, axis = activeFold(viewport)
@@ -520,9 +534,8 @@ function ViewportMetrics.foldRects(viewport)
     and fold.x + fold.width / 2 or fold.y + fold.height / 2
   local leading = largestPane(panes, axis, boundary, true)
   local trailing = largestPane(panes, axis, boundary, false)
-  if not leading or not trailing then return nil, nil, nil, panes end
-  local content = axis == "vertical" and trailing or leading
-  local controls = axis == "vertical" and leading or trailing
+  local content, controls = foldPaneChoice(leading, trailing, axis)
+  if not content or not controls then return nil, nil, nil, panes end
   return content, controls, axis, panes
 end
 

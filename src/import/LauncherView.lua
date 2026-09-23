@@ -1569,9 +1569,14 @@ local function buildVerticalHeader(imp, m)
   local rail = m.verticalBar
   local width = rail.buttonW
   local x = rail.x + math.floor((rail.width - width) / 2)
-  local y = rail.top
   local h = m.chip
   local gap = rail.gap
+  local buttonCount = #HEADER_TABS + 3
+  local stackHeight = buttonCount * h + (buttonCount - 1) * gap
+  local minimumTop = rail.top
+  local centeredTop = math.floor((minimumTop + rail.y + rail.height - stackHeight) / 2)
+  local y = math.max(minimumTop,
+    math.min(centeredTop, rail.y + rail.height - stackHeight))
   Theme.fill(rail.x, rail.y, rail.width, rail.height, PAL.surface, 0.34)
   local edgeX = rail.edge == "leading" and rail.x + rail.width - 1 or rail.x
   Theme.fill(edgeX, rail.y, 1, rail.height, PAL.line, Theme.A.hairline)
@@ -6534,7 +6539,8 @@ local function buildTabPanel(imp, x, y, w, availH, budgetH, m)
   return buildGamePanel(imp, x, y, w, availH, m, imp.tab, budgetH)
 end
 
-local function drawTabLayer(imp, tabId, x, contentY, w, viewH, availH, m, dx)
+local function drawTabLayer(imp, tabId, x, contentY, w, viewH, availH, m, dx,
+                            clipY, clipH)
   local prevTab = imp.tab
   imp.tab = tabId
   local at = tabScrollAt(imp)
@@ -6543,7 +6549,7 @@ local function drawTabLayer(imp, tabId, x, contentY, w, viewH, availH, m, dx)
     love.graphics.push()
     love.graphics.translate(dx, 0)
   end
-  local py = Kit.scrollBegin(x, contentY, w, viewH, at, maxAt)
+  local py = Kit.scrollBegin(x, contentY, w, viewH, at, maxAt, clipY, clipH)
   local budgetH = math.floor(viewH * (1 + PANEL_OVERSCAN))
   local panelW = math.max(0, w - Kit.scrollGutter(m.s))
   local contentH = buildTabPanel(imp, x, py + 5, panelW, availH - 5, budgetH - 5, m)
@@ -6552,18 +6558,21 @@ local function drawTabLayer(imp, tabId, x, contentY, w, viewH, availH, m, dx)
   imp._tabScrollMax[tabId] = Kit.scrollExtent(contentH, viewH)
   at = clamp(at, 0, tabScrollMax(imp))
   imp._tabScroll[tabId] = at
-  Kit.scrollEnd(x, contentY, w, viewH, at, tabScrollMax(imp))
+  Kit.scrollEnd(x, contentY, w, viewH, at, tabScrollMax(imp), PAL.surface,
+    clipY, clipH)
   if dx ~= 0 then love.graphics.pop() end
   imp.tab = prevTab
 end
 
 local function drawDuoGamePane(imp, m)
-  local rect = m.sidebarRect
-  if not rect and m.duoAxis == "horizontal" then
-    rect = m.secondaryRect
-  end
+  local rect = m.sidebarRect or m.secondaryRect
   if not rect then return end
   local pad = math.max(m.pad, math.floor(16 * m.s))
+  local tight = rect.width < 140
+  if tight then
+    pad = math.min(pad, math.max(math.floor(6 * m.s),
+      (rect.width - Kit.tapMin()) / 2))
+  end
   local x = rect.x + pad
   local y = rect.y + pad
   local w = rect.width - 2 * pad
@@ -6572,13 +6581,15 @@ local function drawDuoGamePane(imp, m)
   Theme.fillRounded(rect.x + inset, rect.y + inset,
     math.max(1, rect.width - 2 * inset), math.max(1, rect.height - 2 * inset),
     PAL.surface, 1, 14)
-  Kit.textBold("heading", Strings("GAMES"), x, y, PAL.heading)
-  local gridY = y + Kit.textHeight("heading") + math.floor(14 * m.s)
+  if not tight then Kit.textBold("heading", Strings("GAMES"), x, y, PAL.heading) end
+  local gridY = tight and y or y + Kit.textHeight("heading") + math.floor(14 * m.s)
   local gap = math.floor(8 * m.s)
   local columns = math.max(1, math.floor((w + gap) / (132 * m.s)))
   columns = math.min(columns, #GAME_TABS)
   local cellW = math.floor((w - gap * (columns - 1)) / columns)
   local h = math.max(Kit.tapMin(), math.floor(48 * m.s))
+  local letterOnly = w < 110
+  local letterAndLabel = w >= 220
   local rows = math.ceil(#GAME_TABS / columns)
   local contentH = rows * h + math.max(0, rows - 1) * gap
   local viewH = math.max(0, rect.y + rect.height - pad - gridY)
@@ -6594,12 +6605,13 @@ local function drawDuoGamePane(imp, m)
     local row = math.floor((index - 1) / columns)
     local bx = x + column * (cellW + gap)
     local by = drawY + row * (h + gap)
-    btn(imp, bx, by, cellW, h, "duo-game-" .. game.id, Strings(game.label), {
+    btn(imp, bx, by, cellW, h, "duo-game-" .. game.id,
+      letterOnly and game.letter or Strings(game.label), {
       face = "tab",
       color = game.color,
       active = imp.tab == game.id,
       align = "left",
-      letter = game.letter,
+      letter = letterAndLabel and game.letter or nil,
       action = function()
         imp._gamePopup = nil
         imp:_switchTab(game.id)
@@ -6709,7 +6721,10 @@ function LauncherView.draw(imp)
   local contentY = buildHeader(imp, m)
   m.top = baseTop
   local footY, availH
-  if scrollMax > 0 then
+  if m.duoSplit then
+    footY = baseTop + m.h - footH
+    availH = math.max(0, footY - contentY)
+  elseif scrollMax > 0 then
     availH = minPanelHeight(m)
     footY = contentY + availH
   else
@@ -6718,21 +6733,28 @@ function LauncherView.draw(imp)
   end
 
   local x, w = m.contentX, m.contentW
-  local viewH = math.max(0, availH)
+  local clipY = contentY
+  local clipH = math.max(0, availH)
+  if m.duoSplit then
+    clipY = math.max(contentY, baseTop)
+    clipH = math.max(0, footY - clipY)
+  end
+  local viewH = clipH
   local rect = imp._tabRegionRect
   if not rect then rect = {}; imp._tabRegionRect = rect end
-  rect.x, rect.y, rect.w, rect.h = x, contentY, w, viewH
+  rect.x, rect.y, rect.w, rect.h = x, clipY, w, viewH
 
   local tabTr = Transition.get("tabs")
   if tabTr and tabTr.from and tabTr.from ~= tabKeyOf(imp) then
     local p = Transition.progress("tabs")
     local dir = tabTr.dir >= 0 and 1 or -1
     pcall(drawTabLayer, imp, tabTr.from, x, contentY, w, viewH, availH, m,
-      -dir * p * w)
+      -dir * p * w, clipY, clipH)
     drawTabLayer(imp, tabKeyOf(imp), x, contentY, w, viewH, availH, m,
-      dir * (1 - p) * w)
+      dir * (1 - p) * w, clipY, clipH)
   else
-    drawTabLayer(imp, tabKeyOf(imp), x, contentY, w, viewH, availH, m, 0)
+    drawTabLayer(imp, tabKeyOf(imp), x, contentY, w, viewH, availH, m, 0,
+      clipY, clipH)
   end
 
   buildFooter(imp, m, footY)
